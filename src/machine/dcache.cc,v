@@ -1,0 +1,230 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file dcache.cc
+// \brief Routines implementing a data cache
+//
+//  DO NOT CHANGE -- part of the machine emulation
+//
+//  Copyright (c) 1999-2000 INSA de Rennes.
+//  All rights reserved.  
+//  See copyright_insa.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+*/
+
+#include "config.h"
+#include "system.h"
+#include "dcache.h"
+
+//----------------------------------------------------------------------
+// DCache::DCache(int lsize, int nbl, int nbw)
+/*! Constructor. Creates a data cache. 
+//      Its size, size of cache lines (unit of
+//      transfer from memory) and associativity degree as taken as paremeters
+//      of the constructor.	
+//
+//	\param lsize size of a cache block (or line) in bytes
+//      \param nbl total number of cache lines
+//      \param nbw associativity degree
+//----------------------------------------------------------------------*/
+DCache::DCache(int lsize, int nbl, int nbw)
+{
+  lineSize = lsize;
+  nbLines = nbl;
+  nbWays = nbw;
+  nbSets = nbl / nbw;
+  locked = CACHE_UNLOCKED;
+  lastUse = 0;
+  //cacheLines = NULL;
+  cacheLines = new (DCacheLine * [nbSets]);
+  for(int i = 0; i < nbSets; i++)
+    {
+      cacheLines[i] = new DCacheLine[nbWays];
+      for(int j = 0; j < nbWays; j++)
+	cacheLines[i][j].valid = 0;
+    }
+}
+
+//----------------------------------------------------------------------
+// DCache::~DCache()
+/*! Deletes the instruction cache (frees its contents)
+//
+//----------------------------------------------------------------------*/
+DCache::~DCache()
+{
+  delete cacheLines;
+}
+
+
+//----------------------------------------------------------------------
+// int DCache::LoadLine(int physaddress)
+/*! Load a given data, whose physical address is passed
+//      as parameter, in the data cache.
+//      Does not actually load the data in the cache,
+//      just remember that it is loaded.
+//
+//	\param physaddress physical address of the instruction (not necesarily of a cache line boundary)
+//      \return returns CACHE_HIT or CACHE_MISS depending on 
+//              whether or not the instruction is already loaded in the icache.
+//
+//----------------------------------------------------------------------
+*/
+int DCache::LoadLine(int physaddress)
+{
+#ifndef CACHELOCKING
+  return CACHE_MISS;
+#endif // CACHELOCKING
+#ifdef CACHELOCKING
+  int lineNb = physaddress / lineSize;
+  int setNb = lineNb % nbSets;
+  int baseAddress = lineNb * lineSize;
+  int j;
+
+  // If the system is not configured with an dcache
+  // return CACHE_MISS
+  if(!(cfg->DCacheOn))
+    {
+      return CACHE_MISS;
+    }
+
+  /* For debug of data cache locking  */
+  if (locked == CACHE_LOCKED_PRELOAD) {
+    printf("DCache: preloading address %d in set %d\n",physaddress,setNb); 
+  }
+
+  // Then, we have to look into the cache
+  // ------------------------------------
+  /* is the line already in cache ? */
+  for(j = 0; j < nbWays; j++)
+    if(cacheLines[setNb][j].valid && (cacheLines[setNb][j].physaddress == baseAddress))
+      {
+	cacheLines[setNb][j].lastUse = lastUse++;
+	// If the instruction is in the cache, return  CACHE_HIT
+	return CACHE_HIT;
+      }
+
+  /* The instruction is not in the cache, we have to look for
+     one line in the set to place the instruction */
+
+  /* First, we look for an invalid line */
+  /* This is possible only if the cache is not locked */
+  if(locked!=CACHE_LOCKED) {
+
+    for(j = 0; j < nbWays; j++)
+
+      // Find an invalid cache block
+      if(!cacheLines[setNb][j].valid) {
+	cacheLines[setNb][j].valid = 1;
+	cacheLines[setNb][j].physaddress = baseAddress;
+	cacheLines[setNb][j].lastUse = lastUse++;
+	return CACHE_MISS;
+      }
+  }
+
+  /* No invalid line found */
+  /* If we are in preload mode, means that the block has already been
+     assigned to another task, which is incorrect */
+  if (locked == CACHE_LOCKED_PRELOAD) {
+    printf("*** DCcache::LoadLine: Preload of addr %d failed (assigned to other task)\n",
+	   physaddress);
+    exit(-1);
+  }
+  
+  /* No invalid line found, replace a valid line */
+  // (LRU cache replacement policy) */
+  if(locked == CACHE_UNLOCKED)
+    {
+      /* LRU policy for replacement */
+      unsigned long int minUse = cacheLines[setNb][0].lastUse;
+      int j_min = 0;
+      for(j = 1; j < nbWays; j++)
+	if(cacheLines[setNb][j].lastUse< minUse)
+	  {
+	    minUse = cacheLines[setNb][j].lastUse;
+	    j_min = j;
+	  }
+      cacheLines[setNb][j_min].physaddress = baseAddress;
+      cacheLines[setNb][j_min].lastUse = lastUse++;
+      
+      return CACHE_MISS;
+    }
+  
+  return CACHE_MISS;
+#endif // CACHELOCKING
+}
+
+//----------------------------------------------------------------------
+// int DCache::Lock()
+/*! Inhibit the cache replacement policy (the cache is freezed with its current
+//  contents.
+//
+//  See dcache.h for the meanings of the different flags
+//----------------------------------------------------------------------
+*/
+void DCache::Lock(int flag)
+{
+  locked = flag;
+}
+
+//----------------------------------------------------------------------
+// DCache::Print(void)
+/*! Display the cache contents
+//
+//	\param none
+//----------------------------------------------------------------------
+*/
+void DCache::Print(void)
+{
+  printf("Cache contents and configuration\n");
+  printf("--------------------------------\n");
+  printf("  Line size : %d\n",lineSize);
+  printf("  nbLines   : %d\n",nbLines);
+  printf("  nbWays    : %d\n",nbWays);
+  printf("  status    : %s\n",
+	 (locked == CACHE_UNLOCKED) ? "UNLOCKED" : 
+	 ((locked == CACHE_LOCKED_PRELOAD) ? "PRELOAD" : "LOCKED"));
+
+  for(int i = 0; i < nbSets; i++) {
+    printf("    Set %d : ",i);
+    for(int j = 0; j < nbWays; j++) {
+      printf("(%d,%d) ",cacheLines[i][j].physaddress,
+	     cacheLines[i][j].valid);
+    }
+    printf("\n");
+  }
+}
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

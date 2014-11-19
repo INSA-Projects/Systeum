@@ -1,0 +1,362 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @# @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/* Start.s 
+ *	Assembly language assist for user programs running on top of Nachos.
+ *
+ *	Since we don't want to pull in the entire C library, we define
+ *	what we need for a user program here, namely Start and the system
+ *	calls.
+ *
+ *  Copyright (c) 1992-1993 The Regents of the University of California.
+ *  All rights reserved.  See copyright.h for copyright notice and limitation 
+ *  of liability and disclaimer of warranty provisions.
+ */
+
+#define IN_ASM
+#include "syscall.h"
+
+	 // Equivalent to ".text", but with a different name, in order
+	 // to be correctly handled by the ldscript
+        .section .sys,"ax",@@progbits
+	
+        .align  2
+
+/* -------------------------------------------------------------
+ * __start
+ *	Initialize running a C program, by calling "main". 
+ *
+ * 	NOTE: This has to be first, so that it gets loaded at location 0.
+ *	The Nachos kernel always starts a program by jumping to location 0.
+ * -------------------------------------------------------------
+ */
+
+	.globl __start
+	.ent	__start
+__start:
+
+/* Sert dans les versions de gcc 2.95.* à ne pas appeler le
+   point d'entrée "main" (dans ce cas, gcc génère un appelle
+   à une fonction nommée __main ou __gcc_main, qui pose des
+   problèmes à Heptane). On passe par une fonction intermediaire qui
+   est equivalente au main() normal, mais qui n'implique pas la
+   generation de ces appels : _nachos_main. Dans le cas ou on ne fait
+   pas d'appel a Heptane, on peut utiliser libnachos.c, qui
+   definit alors la fonction _nachos_main qui appelle une
+   fonction main() classique => en l'absence d'analyse par
+   Heptane, on peut se contenter de 1/ definir une fonction
+   main() 2/ linker avec libnachos */
+	jal	_nachos_main
+	move	$4,$0		
+	jal	Exit	 /* if we return from main, exit(0) */
+	.end __start
+
+/* -------------------------------------------------------------
+ * System call stubs:
+ *	Assembly language assist to make system calls to the Nachos kernel.
+ *	There is one stub per system call, that places the code for the
+ *	system call into register r2, and leaves the arguments to the
+ *	system call alone (in other words, arg1 is in r4, arg2 is 
+ *	in r5, arg3 is in r6, arg4 is in r7)
+ *
+ * 	The return value is in r2. This follows the standard C calling
+ * 	convention on the MIPS.
+ * -------------------------------------------------------------
+ */
+
+	.globl Halt
+	.ent	Halt
+Halt:
+	addiu $2,$0,SC_Halt
+	syscall
+	j	$31
+	.end Halt
+
+	.globl Exit
+	.ent	Exit
+Exit:
+	addiu $2,$0,SC_Exit
+	syscall
+	j	$31
+	.end Exit
+
+	.globl Exec
+	.ent	Exec
+Exec:
+	addiu $2,$0,SC_Exec
+	syscall
+	j	$31
+	.end Exec
+
+	.globl Join
+	.ent	Join
+Join:
+	addiu $2,$0,SC_Join
+	syscall
+	j	$31
+	.end Join
+
+	.globl Create
+	.ent	Create
+Create:
+	addiu $2,$0,SC_Create
+	syscall
+	j	$31
+	.end Create
+
+	.globl Open
+	.ent	Open
+Open:
+	addiu $2,$0,SC_Open
+	syscall
+	j	$31
+	.end Open
+
+	.globl Read
+	.ent	Read
+Read:
+	addiu $2,$0,SC_Read
+	syscall
+	j	$31
+	.end Read
+
+	.globl Write
+	.ent	Write
+Write:
+	addiu $2,$0,SC_Write
+	syscall
+	j	$31
+	.end Write
+
+	.globl Seek
+	.ent	Seek
+Seek:
+	addiu $2,$0,SC_Seek
+	syscall
+	j	$31
+	.end Seek
+
+	.globl Close
+	.ent	Close
+Close:
+	addiu $2,$0,SC_Close
+	syscall
+	j	$31
+	.end Close
+
+	.globl FSList
+	.ent	FSList
+FSList:
+	addiu $2,$0,SC_FSList
+	syscall
+	j	$31
+	.end FSList
+
+	.globl NewThread
+	.ent	NewThread
+NewThread:
+	addiu $2,$0,SC_NewThread
+	syscall
+	j	$31
+	.end NewThread
+	
+	.globl Remove
+	.ent	Remove
+Remove:
+	addiu $2,$0,SC_Remove
+	syscall
+	j	$31
+	.end Remove
+
+	.globl Yield
+	.ent	Yield
+Yield:
+	addiu $2,$0,SC_Yield
+	syscall
+	j	$31
+	.end Yield
+	
+	.globl PError
+	.ent	PError
+PError:	
+	addiu $2,$0,SC_PError
+	syscall
+	j	$31
+	.end PError
+
+
+	.globl P
+	.ent	P
+P:	addiu $2,$0,SC_P
+	syscall
+	j	$31
+	.end P
+	
+	.globl V
+	.ent	V
+V:	addiu $2,$0,SC_V
+	syscall
+	j	$31
+	.end V
+	
+	.globl SemCreate
+	.ent	SemCreate
+SemCreate:	
+	addiu $2,$0,SC_SemCreate
+	syscall
+	j	$31
+	.end SemCreate
+
+	.globl SemDestroy
+	.ent	SemDestroy
+SemDestroy:
+	addiu $2,$0,SC_SemDestroy
+	syscall
+	j	$31
+	.end SemDestroy
+
+	.globl SysTime
+	.ent	SysTime
+SysTime:
+	addiu $2,$0,SC_SysTime
+	syscall
+	j	$31
+	.end SysTime
+
+	.globl LockCreate
+	.ent	LockCreate
+LockCreate:
+	addiu $2,$0,SC_LockCreate
+	syscall
+	j	$31
+	.end LockCreate
+
+	.globl LockDestroy
+	.ent	LockDestroy
+LockDestroy:	
+	addiu $2,$0,SC_LockDestroy
+	syscall
+	j	$31
+	.end LockDestroy
+		
+	.globl LockAcquire
+	.ent	LockAcquire
+LockAcquire:
+	addiu $2,$0,SC_LockAcquire
+	syscall
+	j	$31
+	.end LockAcquire
+
+	.globl LockRelease
+	.ent	LockRelease
+LockRelease:
+	addiu $2,$0,SC_LockRelease
+	syscall
+	j	$31
+	.end LockRelease
+
+	.globl CondCreate
+	.ent	CondCreate
+CondCreate:
+	addiu $2,$0,SC_CondCreate
+	syscall
+	j	$31
+	.end CondCreate
+
+	.globl CondDestroy
+	.ent	CondDestroy
+CondDestroy:	
+	addiu $2,$0,SC_CondDestroy
+	syscall
+	j	$31
+	.end CondDestroy
+
+
+	.globl CondWait
+	.ent	CondWait
+CondWait:	
+	addiu $2,$0,SC_CondWait
+	syscall
+	j	$31
+	.end CondWait
+
+	.globl CondSignal
+	.ent	CondSignal
+CondSignal:	
+	addiu $2,$0,SC_CondSignal
+	syscall
+	j	$31
+	.end CondSignal
+
+	.globl CondBroadcast
+	.ent	CondBroadcast
+CondBroadcast:	
+	addiu $2,$0,SC_CondBroadcast
+	syscall
+	j	$31
+	.end CondBroadcast
+
+	.globl TtySend
+	.ent	TtySend
+TtySend:	
+	addiu $2,$0,SC_TtySend
+	syscall
+	j	$31
+	.end TtySend
+
+	.globl TtyReceive
+	.ent	TtyReceive
+TtyReceive:	
+	addiu $2,$0,SC_TtyReceive
+	syscall
+	j	$31
+	.end TtyReceive
+	
+	.globl Mkdir
+	.ent	Mkdir
+Mkdir:	addiu $2,$0,SC_Mkdir
+	syscall
+	j	$31
+	.end Mkdir
+	
+	.globl Rmdir
+	.ent	Rmdir
+Rmdir:	addiu $2,$0,SC_Rmdir
+	syscall
+	j	$31
+	.end Rmdir
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

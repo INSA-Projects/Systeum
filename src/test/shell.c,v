@@ -1,0 +1,108 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*
+//  shell.c: a very simple shell running on Nachos
+//
+//  Copyright (c) 1999-2000 INSA de Rennes.
+//  All rights reserved.  
+//  See copyright_insa.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+*/
+
+// Nachos system calls
+#include "libnachos.h"
+
+int
+main()
+{
+    ThreadId newProc;
+    OpenFileId input = ConsoleInput;
+    OpenFileId output = ConsoleOutput;
+    char prompt[2], buffer[60];
+    int i,bg;
+
+    prompt[0] = '-';
+    prompt[1] = '>';
+
+    // Welcome message
+    Printf("Welcome to NachOS\n");
+
+    while( 1 )
+    {
+
+      // Write the prompt
+      Write(prompt, 2, output);
+ 
+      // Wait for a command
+      Read(buffer, 60, input); 
+      
+	i=0;
+	bg=0;
+	while(buffer[i++] != '\n' ) {};
+	buffer[--i]=' ';
+	
+	
+	
+	while(buffer[--i] == ' ') {};
+	
+	
+	// Background execution
+	if (buffer[i]=='&') {
+	    bg=1;
+	    buffer[i]=' ';
+	    while(buffer[--i] == ' ') {};
+	    buffer[++i]='\0';
+	    
+	} else {buffer[++i] = '\0';}
+	
+		
+	// Execute the command
+	// In the case it is a background command, don't wait for its completion
+	if( i > 0 ) {
+	  newProc = Exec(buffer);
+	  if (newProc == -1) {
+	    Printf("\nUnable to run %s\n", buffer);
+	  }
+	  else if (!bg) Join(newProc);
+
+	}
+    }
+    return 0;
+}
+
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

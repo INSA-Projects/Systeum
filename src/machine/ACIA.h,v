@@ -1,0 +1,139 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file ACIA.h
+    \brief Data Structures to emulate an ACIA device
+
+  An ACIA (Asynchronous Communication Interface Adapter) is an asynchronous
+  device (requests return immediately, and an interrupt can be raised
+  later on). It offers two different modes of operation:
+
+      1 - A Busy Waiting mode. In this mode, the ACIA does not raise any
+      interrupt when a char transfer is complete. It's up to the driver
+      to read the ACIA state register to detect transfer completion to be
+      able to send the folloging characters.
+
+      2- An Interrupt mode. In this mode, the ACIA raises an interrupt
+      when a character has been successfully emitted/received. There are
+      different interrupt levels for emission and reception.
+
+    DO NOT CHANGE -- part of the machine emulation
+  
+    Copyright (c) 1999-2000 INSA de Rennes.
+    All rights reserved.  
+    See copyright_insa.h for copyright notice and limitation 
+    of liability and disclaimer of warranty provisions.  */
+		
+#ifndef _ACIA
+#define _ACIA
+
+// Forward declarations
+class ACIA_sysdep;
+
+// Constants to define empy and full registers
+enum RegStatus {EMPTY,FULL};
+
+// The ACIA working mode can be busy waiting or interrupt mode
+// (there are two different interrupt levels for emission and reception)
+#define BUSY_WAITING  0  // Indicate that no ACIA interrupts are allowed.
+#define REC_INTERRUPT 1  // Indicate that reception interrupt are allowed.
+#define EM_INTERRUPT  2  // Indicate that emission  interrupt are allowed.
+
+// The following class defines a ACIA by including an hard 
+// simulated ACIA and by giving simple accesses like putting 
+// or getting a character from the ACIA.
+
+/*! \brief Defines an ACIA (Asynchronous Communication Interface
+  Adapter) device */
+class ACIA{
+ public:
+  /*! Constructor.
+     Initialize ACIA device.
+  */
+  ACIA();
+  
+  /*! Destructor. Deallocate the data used by the ACIA device.
+   */
+  ~ACIA();
+    
+  /*! Change the working mode for the ACIA. The parameter is a
+    bitwise OR of flags defining the interrupts allowed
+    (emission or reception).
+    It must be used to enable/disable reception and emission interrupts 
+    in the Interrupt mode.
+  */
+  void SetWorkingMode(int mod);
+  
+  /*! Get the current working mode for the ACIA (Interrupt or Busy Waiting).
+  */
+  int GetWorkingMode(void);
+
+  //! To get the output register's state value.
+  RegStatus GetOutputStateReg();
+  
+  //! To get the input register's value (For the Busy Waiting mode)
+  RegStatus GetInputStateReg();
+    
+  //! To get the input data register value
+  char GetChar();
+  
+  //! To put a output in the reception data register
+  void PutChar(char);
+
+private:
+  //! Output data register.
+  char outputRegister;
+  //! Input data register.
+  char inputRegister;
+  
+  //! Emission state register.
+  RegStatus inputStateRegister;
+  //! Reception state register.
+  RegStatus outputStateRegister; 
+
+  //! Working mode : Interrupt or Busy Waiting mode.
+  int mode;  
+
+  /*! The class ACIA_sysdep is in charge of the system dependent parts
+    of the ACIA, using UDP sockets.  It will be able to write on
+    the registers of an object from the class ACIA.  */
+  friend class ACIA_sysdep;
+  ACIA_sysdep *sysdep;
+};
+
+#endif // _ACIA
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

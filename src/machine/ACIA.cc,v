@@ -1,0 +1,178 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@//-------------------------------------------------------------------------
+/*! \file ACIA.cc
+// \brief Routines implementing an ACIA device
+
+// Provide reading methodes on ACIA's state registers and on 
+// input/output data register. Two methods provide the reception/emision
+// of a character from/to a remote machine. Methods are also provided to
+// set/get the ACIA working mode (Busy Waiting or Interrupt).
+//
+//  DO NOT CHANGE -- part of the machine emulation
+//
+//  Copyright (c) 1999-2000 INSA de Rennes.
+//  All rights reserved.  
+//  See copyright_insa.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+*/
+//------------------------------------------------------------------------- 
+
+#include "system.h"
+#include "stats.h"
+#include "interrupt.h"
+#include "ACIA_sysdep.h"
+#include "ACIA.h"
+
+//-------------------------------------------------------------------------
+// ACIA::ACIA
+/*! Constructor.
+  Initializes the data registers and the state registers. 
+  Default mode is BUSY_WAITING mode.
+*/
+//-------------------------------------------------------------------------
+ACIA::ACIA()
+{
+  // Setup the system dependent part of the simulator
+  sysdep = new ACIA_sysdep(this);
+
+  // Initialize data registers to '0' (empty char).
+  inputRegister = 0;
+  outputRegister = 0;
+
+  // Initialize state registers to empty. 
+  inputStateRegister = EMPTY;
+  outputStateRegister = EMPTY;
+
+  // Initiliaze working mode to BUSY_WAITING mode.
+  mode = BUSY_WAITING;
+};
+
+//-------------------------------------------------------------------------
+// ACIA::~ACIA
+/*! Destructor. De-allocate the ACIA data structures.
+ */
+//-------------------------------------------------------------------------
+ACIA::~ACIA()
+{
+  delete sysdep;
+};
+
+// Methodes
+
+//-------------------------------------------------------------------------
+// ACIA::SetWorkingMode
+/*! Change the working mode for the ACIA
+  in BUSY_WAITING mode or Interrupt mode.
+  \param mode The new mode (a bitwise OR between flags REC_INTERRUPT, INTERRUPT and BUSY_WAITING).
+*/
+//-------------------------------------------------------------------------
+void 
+ACIA::SetWorkingMode(int mod)
+{
+  mode = mod;
+};
+
+
+//-------------------------------------------------------------------------
+// ACIA::SetWorkingMode
+/*! Change the working mode for the ACIA
+  in BUSY_WAITING mode or Interrupt mode.
+  \param mode The new mode (value : REC_INTERRUPT and/or EM_INTERRUPT or BUSY_WAITING).
+*/
+//-------------------------------------------------------------------------
+int 
+ACIA::GetWorkingMode(void)
+{
+  return mode;
+};
+
+//-------------------------------------------------------------------------
+// ACIA::GetStateInputReg
+//! Get the reception state register contents (used in the BUSY_WAITING mode).
+//-------------------------------------------------------------------------
+RegStatus
+ACIA::GetInputStateReg()
+{
+  // Simulate a clock tick in order to make Nachos able to provide interrupts.
+  interrupt->OneTick(SYSTEM_TICK);
+  return inputStateRegister;
+};
+
+//-------------------------------------------------------------------------
+// ACIA::GetStateOutputReg
+//! Get the reception state register contents (used in tthe BUSY_WAITING  mode).
+//-------------------------------------------------------------------------
+RegStatus
+ACIA::GetOutputStateReg()
+{
+  // Simulate a clock tick in order to make nachos able to provide interruptions.
+  interrupt->OneTick(SYSTEM_TICK);
+  return outputStateRegister;
+};
+
+//-------------------------------------------------------------------------
+//ACIA::GetChar
+//! To get the data register value, then drain the input register..
+//-------------------------------------------------------------------------
+char 
+ACIA::GetChar()
+{
+  char temp;
+  temp = inputRegister;
+  sysdep->Drain();
+  return temp;
+};
+
+// Emission and reception fonctions for the ACIA
+
+//-------------------------------------------------------------------------
+// ACIA::PutChar
+//! Send a character to a remote machine .
+// \param c The character to be send.
+//-------------------------------------------------------------------------
+void 
+ACIA::PutChar(char c)
+{
+  // Fill the output register.
+  outputRegister = c; 
+  // Cause the char forwading.
+  sysdep->SendChar();
+};
+
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

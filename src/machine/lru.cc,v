@@ -1,0 +1,216 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file lru.cc
+// \brief Routines to manage a double-linked list with a  LRU algorithm.
+//
+// 	A "LRUElement" is allocated for each item to be put on the
+//	list; it is de-allocated when the item is removed.
+//
+//  DO NOT CHANGE -- part of the machine emulation
+//
+//  Copyright (c) 1999-2000 INSA de Rennes.
+//  All rights reserved.  
+//  See copyright_insa.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+*/
+
+#include "lru.h"
+#include <stdio.h>
+
+//----------------------------------------------------------------------
+// LRUElement::LRUElement
+/*! 	Initialize a list element, so it can be added in the list.
+//
+//	\param value is the value of the element.
+*/
+//----------------------------------------------------------------------
+LRUElement::LRUElement(int value)
+{
+     v = value;
+     next = NULL;
+     prev = NULL;
+}
+
+//----------------------------------------------------------------------
+// LRU::LRU
+/*!	Initialize the list, empty to start with.
+//	Elements can now be added to the list.
+//      \param max if the maximum size of the list
+*/
+//----------------------------------------------------------------------
+
+LRU::LRU(int max)
+{ 
+    first = last = NULL; 
+    size_max = max;
+    size = 0;
+}
+
+//----------------------------------------------------------------------
+// LRU::~LRU
+/*!	Prepare a LRU for deallocation.  If the LRU still contains any 
+//	LRUElements, de-allocate them.  However, note that we do *not*
+//	de-allocate the "items" on the LRU -- this module allocates
+//	and de-allocates the LRUElements to keep track of each item,
+//	but a given item may be on multiple LRUs, so we can't
+//	de-allocate them here.
+*/
+//----------------------------------------------------------------------
+
+LRU::~LRU()
+{ 
+  LRUElement *element=first;
+  LRUElement *next;
+  if (element!=NULL)
+    next=element->next;
+  while (element != NULL) {
+    delete element;
+    element = next;
+    if (next != NULL) next  = next->next;
+  }
+}
+
+//----------------------------------------------------------------------
+// LRU::WantOldest
+/*!      Look for the oldest elemnt of the list or an empty case
+//      \return the index (-1 if an error occured)
+*/
+//----------------------------------------------------------------------
+
+int
+LRU::WantOldest() {
+  if (size==size_max)
+    return first->v;
+  else
+    return size;
+}
+
+//----------------------------------------------------------------------
+// LRU::Use
+/*!      Look for the element in the list and put it at the end.
+//       
+//	\param value is the index of the element
+//      \return -1 if the index > size of the list, 0 if all is ok
+*/
+//----------------------------------------------------------------------
+int
+LRU::Use(int value)
+{
+  if (value > size_max) return -1;
+
+  LRUElement *element=first;
+
+  // Look for the element
+  while ((element != NULL) && (element->v != value))
+    element = element->next;
+  
+  // The element was not found
+  if (element == NULL) element=NewElement(value);
+  
+  // Put the element in the last position
+  if (element->next != NULL) {  //the last one ?
+    if (element->prev != NULL)  // the first one ?
+      element->prev->next=element->next;
+    else
+      first=first->next;
+    element->next->prev=element->prev;
+    last->next=element;
+    element->prev=last;
+    element->next=NULL;
+    last=element;
+  }
+  return 0;
+}
+
+//----------------------------------------------------------------------
+// LRU::New
+/*!      Add a new element in the list, put out the older one if the list
+//       is full (first of the list). The new element become the last
+//       of the list (thge tounger one)
+//
+//      \return the index of the element, which was put out
+//               -1 if no element was put out.
+*/
+//----------------------------------------------------------------------
+LRUElement *
+LRU::NewElement(int value)
+{
+    LRUElement *element = new LRUElement(value);
+    if (first == NULL) //if list empty
+      first = last = element;
+    else {
+      last->next=element;
+      element->prev=last;
+    }
+    element->next=NULL;
+    last=element;
+    size++;
+    return element;
+} 
+
+//----------------------------------------------------------------------
+// LRU::LRU
+/*!	Reinitialize the list, empty to start with.
+//	Elements can now be added to the list.
+*/
+//----------------------------------------------------------------------
+void
+LRU::Flush()
+{ 
+ LRUElement *element=first;
+  LRUElement *next=element->next;
+  while (element != NULL) {
+    delete element;
+    element = next;
+    next = next->next;
+  }
+
+    first = last = NULL; 
+    size = 0;
+}
+
+void
+LRU::Dump()
+{
+  printf("\n******* LRU List ********\n");
+  for (LRUElement *i=first; i != NULL; i = i->next)
+    printf("%i || ",i->v);
+  printf("\n******* LRU List ********\n");
+    
+}
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

@@ -1,0 +1,59 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/* halt.c
+ *	Simple program to test whether running a user program works.
+ *	
+ *	Just do a "syscall" that shuts down the OS.
+//
+//  Copyright (c) 1992-1993 The Regents of the University of California.
+//  All rights reserved.  See copyright.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+ */
+
+// Nachos system calls
+#include "syscall.h"
+
+int
+main()
+{
+  // Halt Nachos
+  Halt();
+  /* not reached */
+  return 1;
+}
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

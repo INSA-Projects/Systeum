@@ -1,0 +1,79 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @# @;
+
+
+1.1
+date     2005.10.17.18.33.28;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.28;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@##################################################
+# fichier de configuration de NachOS
+##################################################
+
+TLBSize           = 16
+NumPhysPages      = 10000
+BookSize          = 10
+TableType         = SingleLevel
+MaxFileNameSize   = 256
+NumDirEntries     = 30
+NumPortLoc        = 32009
+NumPortDist       = 32009
+ProcessorFrequency = 100
+SectorSize        = 256
+PageSize          = 256
+
+
+# String values
+###############
+# attention la copie peut etre tres lente
+# car le systeme transfert 10 octets par
+# 10 octets on peut changer la constante
+# transfersize dans fstest.cc
+
+TargetMachineName = fou
+FileToCopy	  = test/hello /hello
+FileToCopy	  = test/halt /halt
+FileToCopy       = test/shell /shell
+
+# Boolean values
+################
+UseACIA		 = 0
+TimeSharing      = 0
+ExistTLB         = 0
+PrintStat        = 1
+FormatDisk       = 1
+ListDir          = 1
+PrintFileSyst    = 0
+AddressDump      = 0
+
+ProgramToRun     = /hello
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

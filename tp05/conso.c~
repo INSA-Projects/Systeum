@@ -1,0 +1,12 @@
+répéter
+    attendre signal de F
+    tant que F n'est pas vide:
+        pour chaque élément E de F:
+            verrouiller F
+            imprimer E
+            supprimer E de F
+            déverrouiller F
+        fin pour
+    fin tant-que
+    attendre un signal d'un producteur
+fin répéter

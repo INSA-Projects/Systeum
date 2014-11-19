@@ -1,0 +1,117 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file libnachos.h
+    \brief Function structures for programs 
+   
+  	Libnachos proposes several functions that enable the
+  	user to write programs more advanced.
+  	
+  	This library is not as long as Unix's ones but its 
+  	functions represent those more needed, in different
+  	area :
+  		Input-Output operations,
+  		String operations,
+  		Memory area operations,
+        System calls are defined in kernel/syscalls.h
+  
+    Copyright (c) 1999-2000 INSA de Rennes.
+    All rights reserved.  
+    See copyright_insa.h for copyright notice and limitation 
+    of liability and disclaimer of warranty provisions.
+*/
+#ifndef LIBNACHOS_H
+#define LIBNACHOS_H
+
+#include "syscall.h"
+
+typedef void (*VoidNoArgFunctionPtr)(); 
+typedef unsigned int size_t;
+
+// Concerning thread management
+// ----------------------------
+ThreadId ThreadCreate(char * debugName, VoidNoArgFunctionPtr func);
+
+// Concerning Input/Output operations :
+// ------------------------------------
+
+// Print on the standard output specified parameters.
+void Printf(const char *format, ...);
+
+// Format <buff> (of max length <len>) according to the format <format>
+int Snprintf(char * buff, int len, const char *format, ...);
+
+// Concerning string operations :
+// ------------------------------
+
+// Compare two strings byte by byte.
+int Strcmp(const char *s1, const char *s2);
+
+// Copy a string.
+char* Strcpy(char *dst, const char *src);
+
+// Return the number of bytes in a string.
+size_t Strlen(const char *s);
+
+// appends a copy of a string, to the end of another string.
+char* Strcat(char *dst, const char *src);
+
+// Return a upper-case letter, 
+// equivalent to the lower-case letter given. 
+int Toupper(int c);
+
+// Return a lower-case letter, 
+// equivalent to the upper-case letter given. 
+int Tolower(int c);
+
+// Convert a string in integer.
+int Atoi(const char *str);
+
+// Concerning memory area operations :
+// -----------------------------------
+
+// Compare two memory area, looking at the first n bytes .
+int Memcmp(const void *s1, const void *s2, size_t n);
+
+// Copy n byte from an memory area to another.
+void* Memcpy(void *s1, const void *s2, size_t n);
+
+// Set the first n bytes in a memory area to a specified value.
+void* Memset(void *s, int c, size_t n);
+
+#endif //LIBNACHOS_H
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

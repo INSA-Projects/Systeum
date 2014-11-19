@@ -1,0 +1,55 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @# @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@# NOTE: this is a GNU Makefile.  You must use "gmake" rather than "make"
+#
+# The compilation rules are defined in $(TOPDIR)/Makefile.user
+# Please don't update them
+#
+# To add generate a new program, just update the PROGRAMS target below
+
+PROGRAMS = halt hello shell matmult sort
+
+all: $(PROGRAMS)
+
+TOPDIR = ../
+include $(TOPDIR)/Makefile.user
+
+# Dependances
+$(PROGRAMS): % : $(USERLIB)/sys.o $(USERLIB)/libnachos.o %.o
+
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

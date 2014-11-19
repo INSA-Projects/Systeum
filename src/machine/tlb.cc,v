@@ -1,0 +1,211 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file tlb.cc
+// \brief Routines implementing the TLB - Translate Look-aside Buffer
+//
+//  DO NOT CHANGE -- part of the machine emulation
+//
+//  Copyright (c) 1999-2000 INSA de Rennes.
+//  All rights reserved.  
+//  See copyright_insa.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+*/
+
+#include "config.h"
+#include "lru.h"
+#include "stats.h"
+#include "thread.h"
+#include "tlb.h"
+
+// ---------------------------------------------------------------
+// TLB::TLB
+/*!  Constructor. Create the TLB
+*/
+// ---------------------------------------------------------------
+TLB::TLB(void) {
+  // create the LRU structure
+  list = new LRU(cfg->TLBSize);
+  // create the cache
+  cache = new TLBEntry[cfg->TLBSize];
+  // all bits valid are false
+  for (int i=0; i<cfg->TLBSize; i++)
+    cache[i].valid=false;
+}
+
+// ---------------------------------------------------------------
+// TLB::~TLB()
+/*! Destructor. De-allocate the data structures used by the TLB
+*/
+// ---------------------------------------------------------------
+TLB::~TLB() {
+  delete [] cache;
+  delete list;
+}
+
+// ---------------------------------------------------------------
+// bool Translate(int virtualPage, int* physicalPage, bool* readOnly)
+/*! 	Translate a virtual page number into a physical page number, using 
+//	the TLB.  If the entry corresponding to virtualPage is found,
+//	store the translated physical address in "physicalAddr" and
+//	the readOnly flag in *readOnly, and return true.  If there is
+//	no corresponding entry, return false.
+//
+//	\param virtualPage the virtual page number to translate
+//	\param physicalPage pointer to the resulting translated
+//	  physical page number
+// 	\param readOnly pointer to indicate whether the translated
+// 	  page is r/w or ro
+//	\return true if the entry for "virtualPage" was found in the
+//	  tlb. false otherwise.
+*/
+// ---------------------------------------------------------------
+bool
+TLB::Translate(int virtualPage, int* physicalPage, bool* readOnly) {
+  int idx;
+  TLBEntry* entry=NULL;
+
+  DEBUG('p',"TLB: Try to translate the virtual page number %d\n",
+	virtualPage);
+
+  // look for the entry in the cache
+  for (idx = 0; idx < cfg->TLBSize; idx++)
+    if (cache[idx].valid && (cache[idx].virtualPage == virtualPage)) {
+      entry = &cache[idx];		
+      *physicalPage = cache[idx].physicalPage;
+      *readOnly = cache[idx].readOnly;
+      break;	// FOUND!
+    }
+
+#ifndef CACHELOCKING
+  // statictics management
+  currentThread->GetProcessOwner()->stat->incrUserTicks(TLB_TICKS);
+#endif // CACHELOCKING
+
+  // TLB default management
+  if (entry == NULL)
+    {
+      currentThread->GetProcessOwner()->stat->incrTLBmiss();
+      DEBUG('p',"TLB: The virtual page number %d is not in the TLB\n",
+	    virtualPage);
+      return false;
+    }
+
+  // tell the LRU algorithm that page numbre "idx" was used
+  list->Use(idx);
+
+  DEBUG('p', "TLB: Translated to real address : %d\n", physicalPage);
+
+  return true;
+}
+
+
+// ---------------------------------------------------------------
+// TLB::Add(int virtualPage, int physicalPage, bool readOnly)
+/*! Add a new entry in the TLB (LRU policy)
+// Insert a new entry for the translation virtPage->physPage in the
+// TLB, according to the LRU algorithm. ASSUMES that the entry was not
+// already in the TLB !!!
+//
+//   \param virtualPage Translation for this virtual page number to
+//     insert in the TLB
+//   \param physicalPage The physical page number corresponding to this
+//     new translation. WARNING: may correspond to out-of-memory pages
+//   \param readOnly the new translation corresponds to a r/o page
+*/
+// ---------------------------------------------------------------
+void TLB::Add(int virtualPage, int physicalPage, bool readOnly)
+{
+    // get for the oldest entry (LRU algorithm)
+    int idx=list->WantOldest();
+    TLBEntry * entry = &cache[idx];
+
+    // update the entry in the cache
+    entry->virtualPage = virtualPage;
+    entry->physicalPage = physicalPage;
+    entry->valid = true;
+    entry->readOnly = readOnly;
+
+    // tell the LRU algorithm that page numbre "idx" was used
+    list->Use(idx);  
+}
+
+
+// ---------------------------------------------------------------
+// TLB::Flush()
+/*! Disable all entry in the TLB
+*/
+// ---------------------------------------------------------------
+void TLB::Flush() { 
+  for (int idx = 0; idx< cfg->TLBSize;idx++) {
+      // disable the entry
+      cache[idx].valid=false;
+  }
+}
+
+
+// ---------------------------------------------------------------
+// TLB::Invalid(int vpn)
+/*! Disable an entry in the TLB
+//  
+//  \param vpn the virtual page number to be invalidated
+*/
+// ---------------------------------------------------------------
+void TLB::Invalid(int vpn) {
+
+  for (int i = 0; i < cfg->TLBSize; i++){
+    if ((cache[i].virtualPage == vpn) && (cache[i].valid)) { 
+      cache[i].valid=false;
+      DEBUG('p',"Virtual page %i is disabled in the TLB \n",vpn);
+      break;
+    }
+  }
+}
+
+// ---------------------------------------------------------------
+// TLB::Dump()
+/*! Show all entry of the TLB
+*/
+// ---------------------------------------------------------------
+void TLB::Dump() {
+  
+  printf("Tlb dump :\n");
+  for (int i = 0; i < cfg->TLBSize; i++){
+    printf("%i : vpn = %i, rpn = %i, valid = %i \n",i,cache[i].virtualPage,cache[i].physicalPage,cache[i].valid);
+   }
+}
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

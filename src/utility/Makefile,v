@@ -1,0 +1,46 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @# @;
+
+
+1.1
+date     2005.10.17.18.33.32;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.32;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@# NOTE: this is a GNU Makefile.  You must use "gmake" rather than "make".
+
+OBJS = bitmap.o config.o stats.o utility.o
+
+archive.a: $(OBJS)
+
+TOPDIR = ../
+include $(TOPDIR)/Makefile.kernel
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

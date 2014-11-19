@@ -1,0 +1,105 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@//---------------------------------------------------------------
+/*! \file swap.h
+   \brief Data structures for the swap mamager
+  
+   This file provides functions in order to access and 
+   manage the swapping mechanism in Nachos.
+  
+    Copyright (c) 1999-2000 INSA de Rennes.
+    All rights reserved.  
+    See copyright_insa.h for copyright notice and limitation 
+    of liability and disclaimer of warranty provisions.
+  
+*/
+//---------------------------------------------------------------
+
+#ifndef __SWAPMGR_H
+#define __SWAPMGR_H
+
+// Forward declarations
+class BackingStore;
+class DriverDisk;
+class BitMap;
+class OpenFile;
+
+//-----------------------------------------------------------------
+/*! \brief Implements the swap manager
+  
+   Data structures for providing a swapping mechanism in Nachos.
+   They supports operations in order to :
+     - save a page from a buffer to the swapping area, 
+     - restore a page from the swapping area to a buffer,
+     - release an unused page in the swapping area,
+     - get a page of code or datas from a program file and put 
+       it in a buffer.
+  
+*/
+//-----------------------------------------------------------------
+
+class BackingStore {
+public:
+  BackingStore();          // Initialiaze the swapping area
+  ~BackingStore();         // De-allocate the swapping area
+  
+  //! Fill the buffer swap_page with the datas which are in the sector
+  //! num_sector
+  void get_page_swap(int num_sector,char* Swap_Page);   
+
+  //! Put a page into the swapping area at sector num_sector
+  int put_page_swap(int num_sector, char* SwapPage);
+
+  //! Called to free an unused page in the swap disk
+  void release_page_swap(int num_sector); 
+
+  //! Get a page of code or datas from a program file
+  int get_page_file(int offset, OpenFile *exec_file, char *SwapPage);
+   
+private:
+  DriverDisk *disk;    /*!< Disk which contains the swapping area   */
+  BitMap *page_flags;  /*!< Array of flags used to know the state of each sector in
+			      the swapping area */
+  int get_next_free_page(); // returns the number of the next free page  
+};
+
+#endif // __SWAPMGR_H
+
+
+
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

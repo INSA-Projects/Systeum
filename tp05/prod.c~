@@ -1,0 +1,7 @@
+accede à la mémoire, fait des P, checke si le tampon est plein, ajoute des éléments
+
+créer un document D
+verrouiller F
+    ajouter D à la fin de la file F
+déverrouiller F
+envoyer un signal au processus consommateur

@@ -1,0 +1,413 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file translationtable..cc
+// \brief Data structures for address translation
+//
+// DO NOT CHANGE -- part of the machine emulation
+//
+//  Copyright (c) 1999-2000 INSA de Rennes.
+//  All rights reserved.  
+//  See copyright_insa.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+//
+*/
+
+#include "system.h"
+
+#include "config.h"
+#include "thread.h"
+#include "translationtable.h"
+
+//----------------------------------------------------------------------
+// TranslationTable::TranslationTable
+/*!  Constructor. Create the memory management structures
+//   \param _mode : the type of the memory management structures
+//   - Single Level : use simple table page
+//   - Dual Level : use book table associated with table pages
+*/
+//----------------------------------------------------------------------
+TranslationTable::TranslationTable(TranslationMode _mode) {
+
+  // Init private fields
+  mode = _mode;
+  maxNumPages = cfg->MaxVirtPages;
+  
+  DEBUG('p',"%s-level translation table required for at least %d pages (%ld kB)\n",
+	(mode==DualLevel)?"Dual":"Single",
+	maxNumPages, ((long long)maxNumPages*cfg->PageSize) >> 10);
+
+  // Translation table with two level
+  if (mode==DualLevel) {
+    int nBooks = divRoundUp(maxNumPages, cfg->BookSize);
+    bookTable = new PageTableBook[nBooks];
+    pageTable = NULL;
+
+    DEBUG('p',"Two-level translation table created with at most %i books\n",
+	  nBooks);
+  }
+ // Translation table with one level
+  else {
+    bookTable = NULL;
+    pageTable = new PageTableEntry[maxNumPages];
+
+    DEBUG('p',"One-level translation table created with at most %d pages\n",
+	  maxNumPages);
+  }
+}
+
+//----------------------------------------------------------------------
+// TranslationTable::~TranslationTable()
+/*!  Destructor. De-allocate the memory management structures
+*/
+//----------------------------------------------------------------------
+TranslationTable::~TranslationTable() {
+  if (mode==DualLevel) {
+    delete [] bookTable;
+    DEBUG('p',"Two-level translation table destroyed");
+  }
+  else {
+    delete [] pageTable;
+    DEBUG('p',"One-level translation table destroyed");
+  }
+  maxNumPages = -1;
+}
+
+//----------------------------------------------------------------------
+// TranslationTable::getMaxNumPages()
+/*! Get the number of pages that can be translated using the
+//  translation table.
+*/
+//----------------------------------------------------------------------
+int TranslationTable::getMaxNumPages() {
+  return maxNumPages;
+}
+
+
+//----------------------------------------------------------------------
+//  TranslationTable::getPageTableEntry
+/*!  Get the entry of a virtual page
+//   \param virtualPage : the virtual page (supposed to be between 0 and the
+//     size of the address space)
+//   \return a pointer to the entry
+*/
+//----------------------------------------------------------------------
+PageTableEntry *TranslationTable::getPageTableEntry(int virtualPage) {
+  ASSERT ((virtualPage >= 0) && (virtualPage < maxNumPages));
+
+  currentThread->GetProcessOwner()->stat->incrMemoryAccess();
+  if (mode==DualLevel) {
+    // With a Dual Level table, we have two accesses to the memory: 
+    // one to get the book, one to get the page 
+    currentThread->GetProcessOwner()->stat->incrMemoryAccess();
+
+    return &(bookTable[virtualPage / cfg->BookSize].pageTable[virtualPage % cfg->BookSize]);
+  }
+  else
+    return &pageTable[virtualPage];
+}
+
+
+//----------------------------------------------------------------------
+//  TranslationTable::setPageTableEntry
+/*!  Set the entry of a virtual page
+//   \param virtualPage : the virtual page
+//   \param entry : the entry
+*/
+//----------------------------------------------------------------------
+void TranslationTable::setPageTableEntry(int virtualPage, PageTableEntry model) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  *e = model;
+}
+
+
+//----------------------------------------------------------------------
+// TranslationTable::setPhysicalPage
+/*!  Set the physical page of a virtual page
+//   \param virtualPage : the virtual page
+//   \param physicalPage : the physical page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::setPhysicalPage(int virtualPage,short int physicalPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->physicalPage = physicalPage;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::getPhysicalPage
+/*!  Get the physical page of a virtual page
+//   \param virtualPage : the virtual page
+//   \return the physical page
+*/
+//----------------------------------------------------------------------
+short int TranslationTable::getPhysicalPage(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  return e->physicalPage;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::setAddrDisk
+/*!  Set the disk address of a virtual page
+//   \param virtualPage : the virtual page
+//   \param addrDisk : the address on disk (page number in swap, bytes in
+//                     executable file)
+*/
+//----------------------------------------------------------------------
+void TranslationTable::setAddrDisk(int virtualPage,short int addrDisk) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->addrDisk = addrDisk;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::getAddrDisk
+/*!  Get the disk address of a virtual page
+//   \param virtualPage : the virtual page
+//   \return the disk address (page number in swap, or bytes in exec file)
+*/
+//----------------------------------------------------------------------
+short int TranslationTable::getAddrDisk(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  return e->addrDisk;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::setBitValid
+/*!  Set the bit valid of a virtual page
+//   \param virtualPage : the virtual page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::setBitValid(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->valid = true;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::clearBitValid
+/*!  Clear the bit valid of a virtual page
+//   \param virtualPage : the virtual page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::clearBitValid(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->valid = false;
+}
+
+//----------------------------------------------------------------------
+//   TranslationTable::getBitValid
+/*!  Get the bit valid of a virtual page
+//   \param virtualPage : the virtual page
+//   \return value of the bit valid
+*/
+//----------------------------------------------------------------------
+bool TranslationTable::getBitValid(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  return e->valid;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::setBitIo
+/*!  Set the bit io of a virtual page
+//   \param virtualPage : the virtual page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::setBitIo(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->io = true;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::clearBitIo
+/*!  Clear the bit io of a virtual page
+//   \param virtualPage : the virtual page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::clearBitIo(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->io = false;
+}
+
+//----------------------------------------------------------------------
+//   TranslationTable::getBitIo
+/*!  Get the bit io of a virtual page
+//   \param virtualPage : the virtual page
+//   \return value of the bit io
+*/
+//----------------------------------------------------------------------
+bool TranslationTable::getBitIo(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  return e->io;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::setBitSwap
+/*!  Set the bit swap of a virtual page
+//   \param virtualPage : the virtual page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::setBitSwap(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->swap = true;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::clearBitSwap
+/*!  Clear the bit swap of a virtual page
+//   \param virtualPage : the virtual page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::clearBitSwap(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->swap = false;
+}
+
+//----------------------------------------------------------------------
+//   TranslationTable::getBitSwap
+/*!  Get the bit swap of a virtual page
+//   \param virtualPage : the virtual page
+//   \return value of the bit swap
+*/
+//----------------------------------------------------------------------
+bool TranslationTable::getBitSwap(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  return e->swap;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::setBitReadAllowed
+/*!  Set the bit readAllowed of a virtual page
+//   \param virtualPage : the virtual page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::setBitReadAllowed(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->readAllowed = true;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::clearBitReadAllowed
+/*!  Clear the bit readAllowed of a virtual page
+//   \param virtualPage : the virtual page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::clearBitReadAllowed(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->readAllowed = false;
+}
+
+//----------------------------------------------------------------------
+//   TranslationTable::getBitReadAllowed
+/*!  Get the bit readAllowed of a virtual page
+//   \param virtualPage : the virtual page
+//   \return value of the bit readAllowed
+*/
+//----------------------------------------------------------------------
+bool TranslationTable::getBitReadAllowed(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  return e->readAllowed;
+}
+
+
+//----------------------------------------------------------------------
+//  TranslationTable::setBitWriteAllowed
+/*!  Set the bit writeAllowed of a virtual page
+//   \param virtualPage : the virtual page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::setBitWriteAllowed(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->writeAllowed = true;
+}
+
+//----------------------------------------------------------------------
+//  TranslationTable::clearBitWriteAllowed
+/*!  Clear the bit writeAllowed of a virtual page
+//   \param virtualPage : the virtual page
+*/
+//----------------------------------------------------------------------
+void TranslationTable::clearBitWriteAllowed(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  e->writeAllowed = false;
+}
+
+//----------------------------------------------------------------------
+//   TranslationTable::getBitWriteAllowed
+/*!  Get the bit writeAllowed of a virtual page
+//   \param virtualPage : the virtual page
+//   \return value of the bit writeAllowed
+*/
+//----------------------------------------------------------------------
+bool TranslationTable::getBitWriteAllowed(int virtualPage) {
+  PageTableEntry * e = getPageTableEntry(virtualPage);
+  return e->writeAllowed;
+}
+
+//----------------------------------------------------------------------
+//   PageTableEntry::PageTableEntry
+/*!  Constructor. Defaut initialization of a page table entry
+*/
+//----------------------------------------------------------------------
+PageTableEntry::PageTableEntry()
+{
+  valid=false;
+  swap=false;
+  addrDisk = -1;
+  readAllowed=false;
+  writeAllowed=false;
+}
+
+//----------------------------------------------------------------------
+//  PageTableBook::PageTableBook
+/*!  Constructor. Initialization of the root table in the case
+//   of a two-level page table
+*/
+//----------------------------------------------------------------------
+PageTableBook::PageTableBook()
+{
+  pageTable = new PageTableEntry[cfg->BookSize];
+}
+
+//----------------------------------------------------------------------
+//  PageTableBook::PageTableBook
+/*! Destructor. Deallocates the root table in the case
+//   of a two-level page table
+*/
+//----------------------------------------------------------------------
+PageTableBook::~PageTableBook()
+{
+  delete [] pageTable;
+}
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

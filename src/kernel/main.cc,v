@@ -1,0 +1,190 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file  main.cc 
+//  \brief Bootstrap code to initialize the operating system kernel.
+//
+// Usage: nachos -d <debugflags> -rs <random seed #>
+//		-s -x <nachos file>
+//              -z -f <configfile> 
+//
+//    -d causes certain debugging messages to be printed (cf. utility.h)
+//    -s causes user programs to be executed in single-step mode
+//    -z prints the copyright message
+//    -f <configfile> gives the name of a configuration file for Nachos
+//    -x runs a user program
+//
+//  NOTE -- flags are ignored until the relevant assignment.
+*/
+// Copyright (c) 1992-1993 The Regents of the University of California.
+// All rights reserved.  See copyright.h for copyright notice and limitation 
+// of liability and disclaimer of warranty provisions.
+
+#define MAIN
+#include "copyright.h"
+#undef MAIN
+
+
+#include "utility.h"
+#include "system.h"
+
+#include "msgerror.h"
+#include "config.h"
+#include "thread.h"
+
+// External functions used by this file
+extern void Copy(char *unixFile, char *nachosFile);
+extern void Print(char *file);
+extern void StartProcess(char *file);
+
+//----------------------------------------------------------------------
+// main
+/*! 	Bootstrap the operating system kernel.  
+//	
+//	Check command line arguments
+//	Initialize data structures
+//	(optionally) Call test procedure
+//
+//	\param argc is the number of command line arguments (including the name
+//		of the command) -- ex: "nachos -d +" -> argc = 3 
+//	\param argv is an array of strings, one for each command line argument
+//		ex: "nachos -d +" -> argv = {"nachos", "-d", "+"}
+*/
+//----------------------------------------------------------------------
+
+int
+main(int argc, char **argv)
+{
+    int argCount;               // the number of arguments 
+				// for a particular command
+                                       
+    int err;
+
+    (void) Initialize(argc, argv);
+    char * startfilename = cfg->ProgramToRun;
+
+    DEBUG('t', "Entering main");
+    for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount) {
+	argCount = 1;
+        if (!strcmp(*argv, "-z"))               // print copyright
+            printf (copyright);
+
+        if (!strcmp(*argv, "-x")) {      	// run a user program
+	    ASSERT(argc > 1);
+            argCount = 2;
+	    startfilename = argv[1];
+        }
+    }
+    if (cfg->Remove) {	// remove Nachos file
+      fileSystem->Remove(cfg->FileToRemove);
+    }
+     if (cfg->MakeDir) { // Make Nachos directory
+      fileSystem->Mkdir(cfg->DirToMake);
+    }
+     if (cfg->RemoveDir) { // Remove Nachos file
+      fileSystem->Rmdir(cfg->DirToRemove);
+    }
+    if (cfg->NbCopy!=0) {// copy from UNIX to Nachos
+      
+      for(int i=0;i<cfg->NbCopy;i++)
+	{
+	  if ((strlen(cfg->ToCopyUnix[i])!=0)
+	      && (strlen(cfg->ToCopyNachos[i])!=0))
+	     Copy(cfg->ToCopyUnix[i],cfg->ToCopyNachos[i]);
+	}
+    }
+    if (cfg->Print) {	// print a Nachos file
+      Print(cfg->FileToPrint);
+    }
+    if (cfg->ListDir) {	// list Nachos directory
+      fileSystem->List();
+    }
+    if (cfg->PrintFileSyst) {	// print entire filesystem
+      fileSystem->Print();
+    }
+
+    if (! strcmp(startfilename,""))
+      {
+	printf("Warning: No program to start\n");
+      }
+    else
+      {
+	Process * p = new Process(startfilename, & err);
+	if (err != NoError)
+	  {
+	    fprintf(stderr, syscallError->GetFormat(err), startfilename);
+	    exit(-1);
+	  }
+	Thread * t = new Thread(startfilename);
+	userObj->Append((int *)t);
+	err = t->Start(p, p->addrSpace->GetCodeStartAddress(), -1);
+      }
+
+#ifdef ETUDIANTS_TP
+
+    ;    
+
+#endif // ETUDIANTS_TP
+    
+#ifndef ETUDIANTS_TP
+
+ufhzufh
+
+#endif // ETUDIANTS_TP
+
+    currentThread->Finish();	// NOTE: if the procedure "main" 
+				// returns, then the program "nachos"
+				// will exit (as any other normal program
+				// would).  But there may be other
+				// threads on the ready list.  We switch
+				// to those threads by saying that the
+				// "main" thread is finished, preventing
+				// it from returning.
+    return(0);			// Not reached...
+}
+
+
+
+
+
+
+
+
+
+
+
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

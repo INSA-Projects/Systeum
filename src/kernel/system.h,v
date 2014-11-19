@@ -1,0 +1,161 @@
+head	1.2;
+access;
+symbols
+	v0:1.1.1.1 Base:1.1.1;
+locks; strict;
+comment	@ * @;
+
+
+1.2
+date	2006.01.10.14.08.10;	author pgarcia;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.10.17.18.33.29;	author pgarcia;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2005.10.17.18.33.29;	author pgarcia;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@mise a jour pour le system de fichier multi thread
+@
+text
+@/*! \file system.h 
+    \brief Global variables used in Nachos
+
+   Copyright (c) 1992-1993 The Regents of the University of California.
+   All rights reserved.  See copyright.h for copyright notice and limitation 
+   of liability and disclaimer of warranty provisions.
+*/
+
+
+#ifndef SYSTEM_H
+#define SYSTEM_H
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <map>
+using namespace std;
+
+#include "list.h"
+
+/*! Each syscall makes sure that the object that the user passes to it
+ * are of the expected type, by checking the typeId field against
+ * these identifiers
+ */
+typedef enum {
+  SEMAPHORE_TYPE_ID = 0xdeefeaea,
+  LOCK_TYPE_ID = 0xdeefcccc,
+  CONDITION_TYPE_ID = 0xdeefcdcd,
+  FILE_TYPE_ID = 0xdeadbeef,
+  THREAD_TYPE_ID = 0xbadcafe,
+
+  INVALID_TYPE_ID = 0xf0f0f0f
+} ObjectTypeId;
+
+// Forward declarations (ie in other files)
+class Config;
+class Statistics;
+class SyscallError;
+
+class Thread;
+class Scheduler;
+class PageFaultManager;
+class PhysicalMemManager;
+class BackingStore;
+class FileSystem;
+class FileSystemMultiThread;
+class DriverDisk;
+class DriverConsole;
+class DriverACIA;
+
+class Machine;
+class Interrupt;
+class Timer;
+class MMU;
+class TLB;
+class ACIA;
+
+// Initialization and cleanup routines
+extern void Initialize(int argc, char **argv); 	//!< Initialization,
+						//!< called before anything else
+extern void Cleanup();				//!< Cleanup, called when
+						//!< Nachos is done.
+// Global variables
+extern Config *cfg;
+extern Thread *currentThread;			//!< the thread holding the CPU
+extern Thread *threadToBeDestroyed;  		//!< the thread that just finished
+extern Listint *alive;                          //!< list of existing thread
+extern Listint *userObj;                        //!< list of system objects (used in exception.cc to verify existence of semas, conditions, files ...
+extern Scheduler *scheduler;			//!< the ready list
+extern Interrupt *interrupt;			//!< interrupt status
+extern Statistics *stats;			//!< performance metrics
+extern Timer *timer;				//!< the hardware alarm clock
+extern ACIA* acia;
+extern DriverACIA *driverACIA; 
+extern SyscallError *syscallError;
+
+extern Machine* machine;	//!< user program memory and registers
+
+extern FileSystem  *fileSystem;      //!< the file system object
+extern FileSystemMultiThread* fileSystemMultiThread; //!< the file system multi thread object
+extern DriverDisk   *driverDisk;       //!< the disk handler
+
+extern BackingStore *backingStore; // Swap or files on disk (for VMM)
+extern TLB *tlb;
+extern MMU *mmu;
+#ifdef CACHELOCKING
+class ICache;
+class DCache;
+extern ICache *icache;
+extern DCache *dcache;
+typedef struct {
+  int taille;
+  char type;
+  unsigned long nbref;
+} s_intervalle;
+typedef std::map<int, s_intervalle> nrefint_t;
+extern nrefint_t Ref_Counter;
+#endif // CACHELOCKING
+extern PageFaultManager *pageFault;
+extern PhysicalMemManager *physicalMemManager;
+extern DriverConsole *driverConsole;
+extern FILE *addressFile;
+
+#endif // SYSTEM_H
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d45 1
+a45 1
+class OpenFileTable;
+d79 1
+a80 1
+extern OpenFileTable *openFileTable; //!< the Open File Table
+d85 13
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

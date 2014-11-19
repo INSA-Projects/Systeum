@@ -1,0 +1,146 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file switch.h
+    \brief Definitions needed for implementing context switching.
+  
+  	Context switching is inherently machine dependent, since
+  	the registers to be saved, how to set up an initial
+  	call frame, etc, are all specific to a processor architecture.
+  
+   	This file currently supports the SUN SPARC and INTEL 80386
+   	architectures.
+ */
+
+/*
+ * Copyright (c) 1992-1993 The Regents of the University of California.
+ * All rights reserved.  See copyright.h for copyright notice and limitation 
+ * of liability and disclaimer of warranty provisions.
+ */
+
+#ifndef SWITCH_H
+#define SWITCH_H
+
+#include "copyright.h"
+
+#ifndef _ASM
+#include "thread.h"
+
+extern "C" {
+  /* First frame on thread execution stack
+   *	- enable interrupts
+   *    - rely on a struct kernel_context layout of the frame it is
+   *	  started. Used to retrieve the address of the
+   *	  StartThreadExecution wrapper (interrupts disabled), the
+   *	  function that it should then call (interrupts enabled) with
+   *	  its arguments, and the address of the ThreadFinish()
+   *	  wrapper.
+   *	- when the thread function returns, if ever, call ThreadFinish().
+   */
+  void ThreadRoot();
+  
+  //! Stop running current thread, saving its kernel context in curCtx,
+  // and start running nextCtx
+  void SWITCH(KernelContextT *curCtx, KernelContextT *nextCtx);
+
+  //! Stop running current thread without storing its kernel context,
+  // and start running nextCtx
+  void SWITCH_NO_SAVE(KernelContextT *nextCtx);
+}
+#endif
+
+#ifdef HOST_SPARC
+
+/** Registers that must be saved during a context switch.  See comment
+    above. */
+#define I0 4
+#define I1 8
+#define I2 12
+#define I3 16
+#define I4 20
+#define I5 24
+#define I6 28
+#define I7 32
+
+/** Aliases used for clearing code.  */
+#define FP I6
+#define PC I7
+
+/** Registers for ThreadRoot.  See comment above. */
+#define InitialPC       %o0
+#define InitialArg      %o1
+#define WhenDonePC      %o2
+#define StartupPC       %o3
+
+#define PCState         (PC/4-1)
+#define InitialPCState  (I0/4-1)
+#define InitialArgState (I1/4-1)
+#define WhenDonePCState (I2/4-1)
+#define StartupPCState  (I3/4-1)
+
+#endif  // HOST_SPARC
+
+#ifdef HOST_i386
+
+/* the offsets of the registers from the beginning of the thread object */
+#define _ESP     0
+#define _EAX     4
+#define _EBX     8
+#define _ECX     12
+#define _EDX     16
+#define _EBP     20
+#define _ESI     24
+#define _EDI     28
+#define _PC      32
+
+/* These definitions are used in Thread::AllocateStack(). */
+#define PCState         (_PC/4-1)
+#define FPState         (_EBP/4-1)
+#define InitialPCState  (_ESI/4-1)
+#define InitialArgState (_EDX/4-1)
+#define WhenDonePCState (_EDI/4-1)
+#define StartupPCState  (_ECX/4-1)
+
+#define InitialPC       *%esi
+#define InitialArg      %edx
+#define WhenDonePC      *%edi
+#define StartupPC       *%ecx
+
+#endif // HOST_i386
+
+#endif // SWITCH_H
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

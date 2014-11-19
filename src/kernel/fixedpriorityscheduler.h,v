@@ -1,0 +1,143 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file fixedpriorityscheduler.h
+    \brief Data structures for managing fixed priority threads
+           and fixed priority schedulers, as well as the management
+           of priodic threads.
+  
+    Not used in the Nachos assignments (just for curiosity)
+  
+ */
+
+#ifndef FPSCHEDULER_H
+#define FPSCHEDULER_H
+
+#include "scheduler.h"
+#include "thread.h"
+#include "system.h"
+
+// Highest and lowest possible priorities
+// (higher priority tasks with small priority values)
+#define THREAD_PRIO_HIGH 0
+#define THREAD_PRIO_LOW  255  
+
+/*! \brief Data structures for managing threads with a priority and a period  
+ *  
+ */
+class FixedPriorityThread : public Thread {
+
+ public:
+  FixedPriorityThread(char *debugName, int priority, int period);
+
+  //! Attach the thread to a process (return NoError on success)
+  virtual int Start(Process *owner, VoidFunctionPtr func, int arg);
+
+  virtual void Finish();
+
+  int GetPriority() { return priority; }
+
+  void SetPriority(int prio) { priority = prio; }
+
+  int GetPeriod() { return period; }
+
+  void SetPeriod(int p) { period = p; }
+
+  bool IsInterruptInit() { return interruptInitialized; }
+
+  void SetInterruptInit(bool Int) { interruptInitialized = Int; }
+
+  bool IsActive (void) { return active; }
+
+  // Statistics concerning the thread (public to be more convenient)
+  int missedDeadlines;    /* number of missed deadlines */
+  Time maxTime, minTime;  /* minimum and maximum execution times (cycles) */
+  int iterations;         /* number of completed task iterations */
+  int lastNumInstruction; /* total number of instrs after the last instance */
+  int instrInstance;      /* number of instructions for all instances (constant) */
+ private:
+  int priority;
+
+  int period; // -1 for aperiodic tasks
+
+  bool interruptInitialized; // for periodic tasks only
+
+  bool active;
+
+  Time startTime;  /* Instant de démarrage de la tâche (relativement aux cycles
+			déjà utilisés par ce process) */
+
+};
+
+/*! \brief Data structures for the scheduler
+ *     managing threads with a priority and a period  
+ *  
+ */
+class FixedPriorityScheduler : public Scheduler {
+  
+ public:
+  
+  FixedPriorityScheduler();
+  
+  virtual ~FixedPriorityScheduler();
+
+  virtual void ReadyToRun(Thread* thread);
+
+  bool IsActive(FixedPriorityThread *thread);
+
+  virtual FixedPriorityThread* FindNextToRun();
+
+  bool IsAllProcReady() { return allPeriodicProcessesReady; }
+  
+  void SetAllProcReady(void);
+  
+  Time startTime;
+
+  FixedPriorityThread *lastPeriodicThread;
+
+#define N 20
+  float cpuUsage[N];
+
+ private:
+  
+  bool allPeriodicProcessesReady;
+
+  Listint *waitingList;
+};
+
+#endif // FPSCHEDULER_H
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

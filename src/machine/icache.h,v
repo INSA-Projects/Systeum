@@ -1,0 +1,109 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file icache.h
+   \brief Data structures for managing an instruction cache
+  
+    DO NOT CHANGE -- part of the machine emulation
+  
+    Copyright (c) 1999-2000 INSA de Rennes.
+    All rights reserved.  
+    See copyright_insa.h for copyright notice and limitation 
+    of liability and disclaimer of warranty provisions.
+*/
+
+#ifndef ICACHE_H
+#define ICACHE_H
+
+#define ICACHE 0
+#define DCACHE 1
+
+#define CACHE_HIT 1
+#define CACHE_MISS 0
+
+#define CACHE_UNLOCKED 0        // Fully dynamic cache
+#define CACHE_LOCKED_PRELOAD 1  // Replacement policy is off, but
+                                // new blocks can be loaded in the cache
+                                // (in invalid cache lines only)
+                                // This mode is useful during preload phase
+#define CACHE_LOCKED 2          // Locked cache (block replacement and
+                                // loading of new blocks are both forbidden)
+
+typedef struct {
+  int physaddress;
+  int valid;
+  unsigned long int lastUse;
+} ICacheLine;
+
+/*!
+// \brief Defines a simple instruction cache
+//
+// The instruction cache is virtually addressed and physically tagged.
+// Its size and associativity can be set (parameters to the constructor).
+// The cache has a LRU replacement policy.
+// It has a cache locking capability to freeze its contents with its
+//    current contents
+*/
+
+class ICache {
+ public:
+  ICache(int lineSize, int nbLines, int nbWays);  /*!< Create a new empty instruction cache
+						     with the specified dimensions */
+  ~ICache();
+  int LoadLine(int physaddress);   /*!< Load a cache line with instructions from given address
+				   has no effect if locked != CACHE_UNLOCKED and all corresponding cache
+				   lines are valid, or if the address is already in cache.
+				   Return CACHE_HIT if there was a cache hit, CACHE_MISS if there was a miss. */
+  void Lock(int flag);            /*!< Lock the cache if flag != CACHE_UNLOCKED, unlock otherwise */
+
+  void Print(void);               /*!< Display the cache contents */
+
+ private:
+  ICacheLine **cacheLines;       /*!< Cache contents */
+  int nbLines;                  /*!< Number of cache lines */
+  int lineSize;                 /*!< Line size in bytes */
+  int nbWays;                   /*!< Set associativity of the cache (1 for direct-mapped) */
+  int nbSets;                   /*!< Number of sets (= nbLines/nbWays) */
+  int locked;                   /*!< if non-zero, allow replacement of any cache line */
+  unsigned long int lastUse;    /*!< Used for the LRU cache replacement policy */
+  int lastBaseAddress;          /*!< Last address accessed (simulation of the prefetch buffer) */
+
+};
+
+#endif // ICACHE_H
+
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

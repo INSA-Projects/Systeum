@@ -1,0 +1,194 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file drvConsole.cc 
+//  \brief Routines to synchronously access the console
+//
+//      The console is an asynchronous device (requests return 
+//      immediately, and
+//	an interrupt happens later on).  This is a layer on top of
+//	the console providing a synchronous interface
+//      (requests wait until the request completes).
+//
+//	Use a semaphore to synchronize the interrupt handlers with the
+//	pending requests.  And, because the console can only
+//	handle one read operation and one write operation at a time,
+//      use two locks to enforce mutual exclusion.
+//
+//  Copyright (c) 1992-1993 The Regents of the University of California.
+//  All rights reserved.  See copyright.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+*/
+
+#include "interrupt.h"
+#include "drvConsole.h"
+
+//----------------------------------------------------------------------
+// static void ConsoleGet
+/*! 	Console write interrupt handler. Needs this to be a C routine, 
+//      because C++ can't handle pointers to member functions.
+*/
+//----------------------------------------------------------------------
+static void ConsoleGet(int arg) {
+  DriverConsole * s = (DriverConsole *) arg;
+  s->GetAChar();
+}
+
+//----------------------------------------------------------------------
+// static void ConsolePut
+/*! 	Console read interrupt handler.  Needs this to be a C routine, 
+//      because C++ can't handle pointers to member functions.
+*/
+//----------------------------------------------------------------------
+static void ConsolePut(int arg) {
+  DriverConsole * s = (DriverConsole *) arg;
+  s->PutAChar();
+}
+
+
+//-----------------------------------------------------------------
+// DriverConsole::DriverConsole
+/*!     Constructor. 
+//      Initialize the console driver (lock and semaphore creation)
+*/
+//-----------------------------------------------------------------
+DriverConsole::DriverConsole(){
+  Cons = new Console(NULL,NULL,ConsoleGet,ConsolePut,(int)this);
+  get = new Semaphore("get",0);
+  put = new Semaphore("put",0);
+  mutexget = new Lock("mutex get");
+  mutexput = new Lock("mutex put");
+}
+
+
+//-----------------------------------------------------------------
+// DriverConsole::~DriverConsole
+/*!     Destructor.
+//      De-allocate data structures needed by the console driver
+//      (semaphores, locks).
+*/
+//-----------------------------------------------------------------
+DriverConsole::~DriverConsole() {
+  delete mutexget;
+  delete mutexput;
+  delete get;
+  delete put;
+  delete Cons;
+}
+
+
+//-----------------------------------------------------------------
+// DriverConsole::PutAChar
+/*!     Operate a V on the "write" semaphore to signal a char is written.
+//      The method is called by the interrupt handler ConsolePut.
+*/
+//-----------------------------------------------------------------
+void DriverConsole::PutAChar(){
+  
+  IntStatus oldLevel = interrupt->SetLevel(IntOff);
+  put->V();
+  (void) interrupt->SetLevel(oldLevel);
+}
+
+
+//-----------------------------------------------------------------
+// DriverConsole::PutString
+/*!     Send a string to the console device using a lock to insure
+//      mutual exclusion. The method returns when all characters 
+//      has been sent.
+// 
+//      \param buffer contains the data to send
+//      \param size is the number of chars to send
+*/
+//-----------------------------------------------------------------
+void DriverConsole::PutString(char *buffer,int size) {
+  
+  mutexput->Acquire();
+
+  for (int i=0;i<size;i++) {
+    currentThread->GetProcessOwner()->stat->incrNumCharWritten();
+    Cons->PutChar(buffer[i]);
+    put->P();
+  }
+  
+  mutexput->Release();
+}
+
+//-----------------------------------------------------------------
+// DriverConsole::GetAChar
+/*!     Operate a V on the "read" semaphore to signal a char is read.
+//      The method is called by the interrupt handler ConsoleGet.
+*/
+//-----------------------------------------------------------------
+void DriverConsole::GetAChar(){
+  
+  IntStatus oldLevel = interrupt->SetLevel(IntOff);
+  get->V();
+ (void) interrupt->SetLevel(oldLevel);
+
+}
+
+
+//-----------------------------------------------------------------
+// DriverConsole::GetString
+/*!     Receive a string from the console device using a lock to 
+//      prevent from concurrent accesses. The method returns when
+//      all characters has been received.
+//
+//      \param buffer is the structure to fill
+/       \param size is the number max of char to be received
+*/
+//-----------------------------------------------------------------
+void DriverConsole::GetString(char *buffer,int size) {
+  
+  char c = 0;
+
+  mutexget->Acquire();
+  Cons->EnableInterrupt();
+  
+  for (int i=0;((i<size) && (c!='\n'));i++) {
+    currentThread->GetProcessOwner()->stat->incrNumCharRead();
+    get->P();
+    c =  Cons->GetChar();
+    buffer[i] = c;
+  }
+  
+  Cons->DisableInterrupt();
+  mutexget->Release();
+
+}
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

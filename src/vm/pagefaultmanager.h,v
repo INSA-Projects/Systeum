@@ -1,0 +1,68 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file pagefaultmanager.h
+   \brief Data structures for the page fault manager
+  
+    Copyright (c) 1999-2000 INSA de Rennes.
+    All rights reserved.  
+    See copyright_insa.h for copyright notice and limitation 
+    of liability and disclaimer of warranty provisions.
+*/
+
+
+#ifndef PFM_H
+#define PFM_H
+
+#include "machine.h"
+
+/*! \brief Defines the page fault manager
+   This object manages the page fault of the simulated MIPS processor 
+   for the Nachos kernel.
+*/
+class PageFaultManager {
+
+public:
+   PageFaultManager();
+
+  ~PageFaultManager();
+ 
+  ExceptionType PageFault(int virtualPage); //!< Page faut handler
+};
+
+#endif // PFM_H
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

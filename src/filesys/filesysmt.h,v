@@ -1,0 +1,68 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+1.1
+date	2006.01.04.16.20.33;	author pgarcia;	state Exp;
+branches;
+next	;
+
+
+desc
+@file system multi thread
+@
+
+
+1.1
+log
+@file system multi thread
+CVS ----------------------------------------------------------------------
+@
+text
+@#ifndef FSMT_H
+#define FSMT_H
+
+#include "copyright.h"
+#include "openfile.h"
+#include "filesys.h"
+#include "oftable.h"
+#include "directory.h"
+
+class FileSystemMultiThread {
+public:
+  FileSystemMultiThread();	//!< Initialize the file system.
+                                        //!< Must be called *after* "synchDisk" 
+                                        //!< has been initialized.
+				
+  ~FileSystemMultiThread();
+
+  int Create(char *name, int initialSize); //!< Create a file
+
+  OpenFile* Open(char *name); //!< Open a file
+
+  void Close(OpenFile*); //!< Is called when a thread close a file
+
+  int Remove(char *name); //!< Delete a file
+
+  void FileLock(OpenFile*); //!< Lock a file
+
+  void FileRelease(OpenFile*); //!< Unlock a file
+
+  void List(); //!< List all the files in the file system
+
+  void Print(); //!< List all the files and their contents
+
+  int Mkdir(char *); //!< Create a new directory
+    
+  int Rmdir(char *); //!< Delete a directory
+
+private:
+  OpenFileTable* openFileTable;
+  Lock* lock;
+};
+
+#endif // FSMT_H
+@

@@ -1,0 +1,438 @@
+head	1.2;
+access;
+symbols
+	v0:1.1.1.1 Base:1.1.1;
+locks; strict;
+comment	@// @;
+
+
+1.2
+date	2006.01.10.14.08.10;	author pgarcia;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.10.17.18.33.29;	author pgarcia;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2005.10.17.18.33.29;	author pgarcia;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@mise a jour pour le system de fichier multi thread
+@
+text
+@/*! \file system.cc 
+//  \brief Nachos initialization and cleanup routines.
+*/
+// Copyright (c) 1992-1993 The Regents of the University of California.
+// All rights reserved.  See copyright.h for copyright notice and limitation 
+// of liability and disclaimer of warranty provisions.
+
+
+#include "copyright.h"
+#include "system.h"
+
+#include "config.h"
+#include "copyright.h"
+#include "utility.h"
+#include "thread.h"
+#include "scheduler.h"
+#include "interrupt.h"
+#include "stats.h"
+#include "timer.h"
+#include "backingStore.h"
+#include "mmu.h"
+#include "pagefaultmanager.h"
+#include "physMem.h"
+#include "tlb.h"
+#include "oftable.h"
+#include "drvConsole.h"
+#include "msgerror.h"
+
+#include "ACIA.h"
+#include "drvACIA.h"
+#include "filesys.h"
+#include "filesysmt.h"
+#include "drvDisk.h"
+
+#ifdef CACHELOCKING
+#include "icache.h"
+#include "dcache.h"
+#include "fixedpriorityscheduler.h"
+#endif // CACHELOCKING
+
+
+/*!  This defines *all* of the global data structures used by Nachos.
+// These are all initialized and de-allocated by this file.
+*/
+Config *cfg;
+Thread *currentThread;			//!< the thread we are running now
+Thread *threadToBeDestroyed;  		//!< the thread that just finished
+Listint *alive;                         //!< list of existing thread
+Listint *userObj;                       //!< list of existing objects (semaphore, ...)
+Scheduler *scheduler;			//!< the ready list
+Interrupt *interrupt;			//!< interrupt status
+Statistics *stats;			//!< performance metrics
+Timer *timer;				/*!< the hardware timer device,
+					  for invoking context switches */
+BackingStore *backingStore;  //!< the backing store (swap or files, for
+                             //VMM)
+TLB *tlb;                               //!< the translation lookaside buffer
+MMU *mmu;                               //!< the memory management unit
+#ifdef CACHELOCKING
+ICache *icache;
+DCache *dcache;
+#endif // CACHELOCKING
+PageFaultManager *pageFault;            //!< the page fault manager
+PhysicalMemManager *physicalMemManager; //!< the real memory manager
+DriverConsole *driverConsole;                //!< the console
+
+ACIA *acia;                             //!< the ACIA interface
+DriverACIA *driverACIA;	                //!< the ACIA handler
+SyscallError *syscallError;	        //!< the system call error manager
+
+FileSystem  *fileSystem;                //!< the file system
+FileSystemMultiThread  *fileSystemMultiThread;
+DriverDisk   *driverDisk;               //!< the Disk
+
+Machine *machine;	// user program memory and registers
+
+FILE *addressFile;      //!< the file to dump the adresses in
+
+#ifdef CACHELOCKING
+nrefint_t Ref_Counter;
+#endif // CACHELOCKING
+
+//! External definition, to allow us to take a pointer to this function
+extern void CleanupOK();
+
+
+//----------------------------------------------------------------------
+// TimerInterruptHandler
+/*! 	Interrupt handler for the timer device.  The timer device is
+//	set up to interrupt the CPU periodically (once every TimerTicks).
+//	This routine is called each time there is a timer interrupt,
+//	with interrupts disabled.
+//
+//	Note that instead of calling Yield() directly (which would
+//	suspend the interrupt handler, not the interrupted thread
+//	which is what we wanted to context switch), we set a flag
+//	so that once the interrupt handler is done, it will appear as 
+//	if the interrupted thread called Yield at the point it is 
+//	was interrupted.
+//
+//	\param dummy is because every interrupt handler takes one argument,
+//		whether it needs it or not.
+*/
+//----------------------------------------------------------------------
+static void
+TimerInterruptHandler(int dummy)
+{
+    if (interrupt->getStatus() != IdleMode)
+	interrupt->YieldOnReturn();
+}
+
+//----------------------------------------------------------------------
+// Initialize
+/*! 	Initialize Nachos global data structures.  Interpret command
+//	line arguments in order to determine flags for the initialization.  
+// 
+//	\param argc is the number of command line arguments (including the name
+//		of the command) -- ex: "nachos -d +" -> argc = 3 
+//	\param argv is an array of strings, one for each command line argument
+//		ex: "nachos -d +" -> argv = {"nachos", "-d", "+"}
+*/
+//----------------------------------------------------------------------
+void
+Initialize(int argc, char **argv)
+{
+    int errStatus;
+    int argCount;
+    char* debugArgs = "";
+    char filename[MAXSTRLEN];
+
+    bool debugUserProg = false;	//!< single step user program
+
+    strcpy(filename,CONFIGFILENAME);
+
+    // Scan the arguments
+    for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount) {
+	argCount = 1;
+	if (!strcmp(*argv, "-d")) {
+	    if (argc == 1)
+		debugArgs = "+";	// turn on all debug flags
+	    else {
+	    	debugArgs = *(argv + 1);
+	    	argCount = 2;
+	    }
+	}
+
+	if (!strcmp(*argv, "-s"))
+	    debugUserProg = true;
+	if (!strcmp(*argv, "-f")) {
+	  strcpy(filename,*(argv + 1));
+	}
+    }
+
+    // Assign all global variables
+    cfg = new Config(filename);                 // configure system parameters
+
+    DebugInit(debugArgs);			// initialize DEBUG messages
+
+    stats = new Statistics();			// collect statistics
+    interrupt = new Interrupt;			// start up interrupt handling
+#ifndef CACHELOCKING
+    scheduler = new Scheduler();		// initialize the ready queue
+#endif // CACHELOCKING
+#ifdef CACHELOCKING
+    scheduler = new FixedPriorityScheduler();	// initialize the ready queue
+#endif // CACHELOCKING
+
+    alive = new Listint();
+    userObj = new Listint();
+
+    if (cfg->ExistTLB)
+      tlb = new TLB();
+    else
+      tlb = NULL;
+
+    mmu = new MMU();
+    pageFault = new PageFaultManager();
+    backingStore = new BackingStore();
+    physicalMemManager = new PhysicalMemManager();
+
+    if (cfg->TimeSharing) {		      	// start the timer (if needed)
+      timer = new Timer(TimerInterruptHandler, 0, false);
+    }
+
+    if (cfg->AddressDump != 0) {
+      if (cfg->AddressDump == 1) {
+	addressFile = fopen("adresses","w");
+      }
+#ifdef CACHELOCKING
+      if (cfg->AddressDump == 2) {
+	char buf[MAXSTRLEN];
+	sprintf(buf,"%s.nom",(cfg->ProgramToRun)+1);
+	FILE *f=fopen(buf,"r");
+	if (f==NULL) {
+	  printf("Unable to open .nom file %s\n",buf);
+	  exit(-1);
+	}
+	sprintf(buf,"%s.trace",(cfg->ProgramToRun)+1);
+	addressFile = fopen(buf,"w");
+	while (!feof(f)) { 
+	  int debut,taille,res;
+	  char nom[MAXSTRLEN],type[MAXSTRLEN];
+	  fgets(buf,MAXSTRLEN,f);
+	  if (feof(f)) break;
+	  if ((res=sscanf(buf,"%d %d %s %s",&debut,&taille,nom,type)) != 4) {
+	    printf("Impossible de lire dans le fichier : ligne %s nblus %d\n",
+		   buf,res);
+	    exit(-1);
+	  }
+	  printf("Fichier nom %d %d %s %s\n",debut,taille,nom,type); 
+	  Ref_Counter[debut].taille=taille;
+	  Ref_Counter[debut].nbref=0;
+	  Ref_Counter[debut].type = type[0];
+	}
+      }
+#endif // CACHELOCKING
+    }
+
+    machine = new Machine(debugUserProg);	// this must come first
+
+    threadToBeDestroyed = NULL;
+
+    // We didn't explicitly allocate the current thread we are running in.
+    // But if it ever tries to give up the CPU, we better have a Thread
+    // object to save its state. 
+    // It's just a temporary thread
+
+    // Create the process context for this temporary thread
+    Process * rootProcess = new Process(NULL, & errStatus);
+    if (errStatus != NoError)
+      exit(-1);
+
+    // Create the thread
+#ifdef CACHELOCKING
+    currentThread = new FixedPriorityThread("main-temp",
+					    THREAD_PRIO_LOW, -1);
+#endif // CACHELOCKING
+#ifndef CACHELOCKING
+    // Create the root thread = the current execution context
+    currentThread = new Thread("main-temp");
+#endif // CACHELOCKING
+    errStatus = currentThread->Start(rootProcess, 0x0, -1);
+    if (errStatus != NoError)
+      exit(-1);
+
+    // Remove currentThread from ready list (inserted by default)
+    // because it is currently executing
+    ASSERT(currentThread == scheduler->FindNextToRun());
+
+    interrupt->Enable();
+    CallOnUserAbort(CleanupOK);			// if user hits ctl-C
+
+#ifdef CACHELOCKING
+    // Create the instruction cache
+    // Should be done even if cfg->ICache is off, because the ICache object
+    //    serves both at ICache simulation and simulation of the processor
+    //    prefetch buffer
+    icache = new ICache(cfg->ICacheLineSize, cfg->ICacheNbLines, cfg->ICacheNbWays);
+    if (cfg->ICacheLocked) icache->Lock(CACHE_LOCKED_PRELOAD);
+
+    // Create the data cache
+    if (cfg->DCacheOn)
+      dcache = new DCache(cfg->DCacheLineSize,cfg->DCacheNbLines,cfg->DCacheNbWays);
+    if (cfg->DCacheLocked) dcache->Lock(CACHE_LOCKED_PRELOAD);
+#endif // CACHELOCKING
+    
+    driverDisk = new DriverDisk("DISK");
+    fileSystem = new FileSystem(cfg->FormatDisk);
+    fileSystemMultiThread = new FileSystemMultiThread();
+
+    driverConsole = new DriverConsole();
+    if (cfg->ACIA)
+      {
+	acia = new ACIA();
+	driverACIA = new DriverACIA();
+      }
+    syscallError = new SyscallError();
+}
+
+#ifdef CACHELOCKING
+static void dumpAddrSpace(Thread * t)
+{
+  if (cfg->ICacheTraceDump)
+    t->getProcessOwner()->addrspace->DumpCacheTrace(ICACHE);
+  else if (cfg->DCacheTraceDump)
+    t->getProcessOwner()->addrspace->DumpCacheTrace(DCACHE);
+}
+#endif // CACHELOCKING
+
+//----------------------------------------------------------------------
+// Cleanup
+/*! 	Nachos is halting.  De-allocate global data structures.
+*/
+//----------------------------------------------------------------------
+void
+Cleanup()
+{
+    printf("\nCleaning up...\n");    
+    if (cfg->PrintStat) {
+      stats->Print();
+    }
+
+#ifdef CACHELOCKING
+    if (cfg->AddressDump == 2) {
+      // On sort la taille du code du thread courant
+      fprintf(AddressFile,"TAILLECODE %d\n",
+	      currentThread->getProcessOwner()->addrspace->code_topaddr -
+	      currentThread->getProcessOwner()->addrspace->code_bottomaddr);
+
+      // On sort les traces d'adresses du processus courant
+      for (nrefint_t::const_iterator it = Ref_Counter.begin() ;
+	   it != Ref_Counter.end() ; ++it) {
+	if ((it->second).nbref != 0) {
+	  fprintf(AddressFile,"%d %d %d %c\n",it->first,(it->second).taille,
+		  (int)(it->second).nbref,(it->second).type);
+	}
+      }
+    }
+
+    if (cfg->ICacheTraceDump || cfg->DCacheTraceDump) {
+      // Dump the cache trace for the processes that are still alive
+      alive->Mapcar((VoidFunctionPtr)dumpAddrSpace);
+      // Same thing for the process under deletion (if any)
+      if (threadToBeDestroyed != NULL) {
+	if (cfg->ICacheTraceDump) 
+	  threadToBeDestroyed->getProcessOwner()->addrspace->DumpCacheTrace(ICACHE);
+	if (cfg->DCacheTraceDump)
+	  threadToBeDestroyed->getProcessOwner()->addrspace->DumpCacheTrace(DCACHE);
+      }
+    }
+#endif // CACHELOCKING
+
+    delete syscallError;
+
+    delete machine;
+
+    delete fileSystem;
+    delete fileSystemMultiThread;
+    delete driverDisk;
+    
+    delete backingStore;
+    delete driverConsole;
+    delete timer;
+    delete scheduler;
+    delete interrupt;
+    delete stats;
+    delete physicalMemManager;
+    delete pageFault;
+    if (tlb != NULL) delete tlb;
+    delete mmu;
+
+#ifdef CACHELOCKING
+    delete icache;
+#endif // CACHELOCKING   
+    delete cfg;
+    delete alive;
+    delete userObj;
+}
+
+void
+CleanupOK()
+{
+  Cleanup();
+  Exit(0);
+}
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d32 1
+d35 5
+d59 4
+d72 1
+a73 1
+OpenFileTable *openFileTable;           //!< the open file table
+d79 3
+d161 1
+d163 4
+d189 28
+d234 5
+d241 1
+d253 13
+a267 1
+    openFileTable = new OpenFileTable;
+d269 1
+d280 9
+d303 29
+d338 1
+a339 1
+    delete openFileTable;
+d352 3
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

@@ -1,0 +1,531 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file mmu.cc 
+//  \brief Routines to translate virtual addresses to physical addresses
+//
+//	Software sets up a table of legal translations.  We look up
+//	in the table on every memory reference to find the true physical
+//	memory location.
+//
+// Two types of translation are supported here.
+//
+//	Linear page table -- the virtual page # is used as an index
+//	into the table, to find the physical page #.
+//
+//	Translation lookaside buffer -- associative lookup in the table
+//	to find an entry with the same virtual page #.  If found,
+//	this entry is used for the translation.
+//	If not, it traps to software with an exception. 
+//
+//	In practice, the TLB is much smaller than the amount of physical
+//	memory (16 entries is common on a machine that has 1000's of
+//	pages).  Thus, there must also be a backup translation scheme
+//	(such as page tables), but the hardware doesn't need to know
+//	anything at all about that.
+//
+//	Note that the contents of the TLB are specific to an address space.
+//	If the address space changes, so must do the contents of the TLB!
+*/
+// DO NOT CHANGE -- part of the machine emulation
+//
+// Copyright (c) 1992-1993 The Regents of the University of California.
+// All rights reserved.  See copyright.h for copyright notice and limitation 
+// of liability and disclaimer of warranty provisions.
+#include "copyright.h"
+#include "system.h"
+
+#ifdef CACHELOCKING
+#include "icache.h"
+#include "dcache.h"
+#endif // CACHELOCKING
+
+#include "machine.h"
+#include "addrspace.h"
+#include "physMem.h"
+#include "tlb.h"
+#include "pagefaultmanager.h"
+#include "mmu.h"
+
+#ifdef CACHELOCKING
+
+bool is_in_scratchpad(int addr) {
+  if (((unsigned) addr >= currentThread->GetProcessOwner()->addrspace->scratch_bottomaddr) &&
+      ((unsigned) addr < currentThread->GetProcessOwner()->addrspace->scratch_topaddr))
+    return true;
+  else return false;
+}
+
+void TraceAddress(int addr,bool is_instruction) {
+  char found = 0;
+  if (is_instruction) {
+    for (nrefint_t::const_iterator it = Ref_Counter.begin() ;
+	 it != Ref_Counter.end() && !found; ++it) {
+      if ((addr ==  it->first) ||
+	  ((addr >= it->first) && (addr < (it->first + (it->second).taille)))) {
+	(Ref_Counter[it->first].nbref)++;
+	found = 1;
+	break;
+      }
+    }
+    if (!found) {
+      Ref_Counter[addr].taille=0;
+      Ref_Counter[addr].nbref=1;
+      Ref_Counter[addr].type='U';
+    }
+  }
+}
+#endif // CACHELOCKING
+
+//----------------------------------------------------------------------
+// MMU::MMU()
+/*! Construction. Empty for now  
+*/
+//----------------------------------------------------------------------
+MMU::MMU() {
+  translationTable = NULL;
+}
+
+//----------------------------------------------------------------------
+// MMU::~MMU()
+/*! Destructor. Empty for now
+*/
+//----------------------------------------------------------------------
+MMU::~MMU() {
+  translationTable = NULL;
+}
+
+//----------------------------------------------------------------------
+// MMU::ReadMem
+/*!     Read "size" (1, 2, 4) bytes of virtual memory at "addr" into 
+//	the location pointed to by "value".
+//
+//
+//	\param addr the virtual address to read from
+//	\param size the number of bytes to read (1, 2, 4)
+//	\param value the place to write the result
+//      \return Returns false if the translation step from 
+//              virtual to physical memory failed, true otherwise.
+*/
+//----------------------------------------------------------------------
+bool
+MMU::ReadMem(int virtAddr, int size, int *value, bool is_instruction,
+	     int * fetch_time)
+{
+    int data;
+    ExceptionType exc;
+    int physAddr;
+    
+    DEBUG('a', "Reading VA 0x%x, size %d\n", virtAddr, size);
+
+    // Update statistics
+    currentThread->GetProcessOwner()->stat->incrMemoryAccess();
+
+    // Perform address translation
+    exc = Translate(virtAddr, &physAddr, size, false);
+
+#ifndef CACHELOCKING
+    // Update adress trace file if Nachos has been configured to do so
+    if (cfg->AddressDump == 1) {
+	if (exc == NoException)
+	  fprintf(addressFile,
+		  "thread=0x%x vaddr=0x%x paddr=0x%x size=%d\n",
+		  (unsigned)currentThread, virtAddr, physAddr, size);
+	else
+	  fprintf(addressFile,
+		  "thread=0x%x vaddr=0x%x EXCEPTION=%d size=%d\n",
+		  (unsigned)currentThread, virtAddr, exc, size);	  
+      }
+    /*    if (cfg->AddressDump == 2) {
+      TraceAddress(virtAddr,is_instruction);
+      }*/
+#endif // CACHELOCKING
+#ifdef CACHELOCKING
+    if (exc!= NoException) {
+	if (cfg->AddressDump == 1)
+	  fprintf(addressFile,
+		  "thread=0x%x vaddr=0x%x EXCEPTION=%d size=%d type=%s\n",
+		  (unsigned)currentThread, virtAddr, exc, size,
+		  is_instruction?"INSTR":"DATA");
+	if (cfg->AddressDump == 2) {
+	  TraceAddress(virtAddr,is_instruction);
+	}
+      }
+    else if (is_instruction) /* INSTRUCTION */ {
+	ASSERT(fetch_time != NULL);
+	char *cache_status = "SCRATCH";
+	*fetch_time = cfg->ITHit;
+	  
+	if (is_in_scratchpad(virtAddr)) *fetch_time = cfg->ITHit;
+	else {
+	  // Manage the instruction cache and prefetch buffer
+	  // (do that for instructions in the user area only, not in start.s)
+	  if (! currentThread->GetProcessOwner()->addrspace->IsOutsideBootstrapInstr(virtAddr))
+	    {
+	      *fetch_time = 0;
+	    }
+	  else if (icache->LoadLine(physAddr) == CACHE_HIT)
+	    {
+	      cache_status = "HIT";
+	      *fetch_time = cfg->ITHit;
+	      currentThread->GetProcessOwner()->stat->incrICacheHits();
+	    }
+	  else
+	    {
+	      cache_status = "MISS";
+	      *fetch_time = cfg->ITMiss;
+	      currentThread->GetProcessOwner()->stat->incrICacheMiss();
+	    }
+	}
+
+	// Register addresses in the user code only (to be compatible
+	// with the analysis made by Heptane
+	if (cfg->ICacheTraceDump)
+	  currentThread->GetProcessOwner()->addrspace->CacheTrace(virtAddr,
+								    physAddr,
+								    ICACHE);
+	
+	if (cfg->AddressDump == 1)
+	  fprintf(addressFile,
+		  "thread=0x%x vaddr=0x%x paddr=0x%x size=%d type=INSTR cache=%s\n",
+		  (unsigned)currentThread, virtAddr, physAddr, size,
+		  cache_status);
+	if (cfg->AddressDump == 2) {
+	  TraceAddress(virtAddr,is_instruction);
+	}
+      }
+    else {
+      char * cache_status;
+      *fetch_time = cfg->DTHit;
+      if (is_in_scratchpad(virtAddr)) *fetch_time = cfg->DTHit;
+      else {
+	if (cfg->DCacheOn && dcache->LoadLine(physAddr) == CACHE_HIT) {
+	  cache_status = "HIT";
+	  *fetch_time = cfg->DTHit;
+	  currentThread->GetProcessOwner()->stat->incrDCacheHits();
+	} else {
+	  cache_status = "MISS";
+	  *fetch_time = cfg->DTMiss;
+	  currentThread->GetProcessOwner()->stat->incrDCacheMiss();
+	}
+      }
+      if (cfg->DCacheTraceDump)
+	currentThread->GetProcessOwner()->addrspace->CacheTrace(virtAddr,
+								physAddr,
+								DCACHE);
+      if (cfg->AddressDump == 1) { /* DATA */
+	fprintf(addressFile,
+		"thread=0x%x vaddr=0x%x paddr=0x%x size=%d type=DATA cache=%s\n",
+		(unsigned)currentThread, virtAddr, physAddr, size, cache_status);
+      }
+      if (cfg->AddressDump == 2) {
+	TraceAddress(virtAddr,is_instruction);
+      }
+    }
+#endif // CACHELOCKING
+
+    // Raise an exception if one has been detected during address translation
+    if (exc != NoException) {
+	machine->RaiseException(exc, virtAddr);
+	return false;
+    }
+    
+    // Read data from main memory
+    switch (size) {
+      case 1:
+	data = machine->mainMemory[physAddr];
+	*value = data;
+	break;
+	
+      case 2:
+	data = *(unsigned short *) &machine->mainMemory[physAddr];
+	*value = ShortToHost(data);
+	break;
+	
+      case 4:
+	data = *(unsigned int *) &machine->mainMemory[physAddr];
+	*value = WordToHost(data);
+	break;
+
+    default: ASSERT(false);
+    }
+
+    DEBUG('a', "\tValue read = %8.8x\n", *value);
+
+    return (true);
+}
+
+//----------------------------------------------------------------------
+// MMU::WriteMem
+/*!      Write "size" (1, 2, 4) bytes of the contents of "value" into
+//	virtual memory at location "addr".
+//
+//   	Returns false if the translation step from virtual to physical memory
+//   	failed.
+//
+//	\param addr the virtual address to write to
+//	\param size the number of bytes to be written (1, 2, or 4)
+//	\param value the data to be written
+*/
+//----------------------------------------------------------------------
+bool
+MMU::WriteMem(int addr, int size, int value, int *write_time)
+{
+    ExceptionType exc;
+    int physicalAddress;
+     
+    DEBUG('a', "Writing VA 0x%x, size %d, value 0x%x\n", addr, size, value);
+
+    // Update statistics
+    currentThread->GetProcessOwner()->stat->incrMemoryAccess();
+
+    // Perform address translation
+    exc = Translate(addr, &physicalAddress, size, true);
+    if (exc != NoException) {
+	machine->RaiseException(exc, addr);
+	return false;
+    }
+
+    // Write into the machine main memory
+    switch (size) {
+      case 1:
+	machine->mainMemory[physicalAddress] = (unsigned char) (value & 0xff);
+	break;
+
+      case 2:
+	*(unsigned short *) &machine->mainMemory[physicalAddress]
+		= ShortToMachine((unsigned short) (value & 0xffff));
+	break;
+      
+      case 4:
+	*(unsigned int *) &machine->mainMemory[physicalAddress]
+		= WordToMachine((unsigned int) value);
+	break;
+      default: ASSERT(false);
+    }
+
+#ifdef CACHELOCKING
+    char *cache_status = "SCRATCH";
+    if (is_in_scratchpad(addr)) *write_time = cfg->DTHit;
+    else {
+      if (cfg->DCacheOn && dcache->LoadLine(physicalAddress) == CACHE_HIT) {
+	cache_status = "HIT";
+	*write_time = cfg->DTHit;
+	currentThread->GetProcessOwner()->stat->incrDCacheHits();
+      } else {
+	cache_status = "MISS";
+	*write_time = cfg->DTMiss;
+	currentThread->GetProcessOwner()->stat->incrDCacheMiss();
+      }
+    }
+    if (cfg->DCacheTraceDump)
+      currentThread->GetProcessOwner()->addrspace->CacheTrace(addr,
+							      physicalAddress,
+							      DCACHE);
+    if (cfg->AddressDump == 1) { /* DATA */
+	fprintf(addressFile,
+		"thread=0x%x vaddr=0x%x paddr=0x%x size=%d type=DATA(W) cache=%s\n",
+		(unsigned)currentThread, addr, physicalAddress, size, cache_status);
+	
+    }
+    if (cfg->AddressDump == 2) {
+      TraceAddress(addr,false);
+    }
+#endif // CACHELOCKING
+    
+    DEBUG('a', "\tValue written");
+
+    return true;
+}
+
+//----------------------------------------------------------------------
+// MMU::Translate(int virtAddr, int* physAddr, int size, bool writing)
+/*! 	Translate a virtual address into a physical address, using 
+//	either a page table or a TLB.
+//         - check for alignment constraints
+//         - Look for a translation of the virtual page in the TLB
+//             - if found, check access rights and physical address
+//                correctness, returns the physical page
+//         - else Look for a translation of the virtual page in the
+//           translation pages
+//             - make sure the entry corresponds to a correct entry,
+//               ie it maps something (phys mem or disk) <=> at least one
+//               of the readAllowed or writeAllowed bits is set ?
+//             - check access rights
+//	       - If bit valid=true : physical page already known,
+//               update the TLB
+//	       - Else if bit valid=false : call PageFaultManager and update
+//  	         the TLB
+//             - returns the physical page
+//
+//      If everything is ok, set the use/dirty bits in
+//	the translation table entry, and store the translated physical 
+//	address in "physAddr".  If there was an error, returns the type
+//	of the exception.
+//
+//	\param virtAddr the virtual address to translate
+//	\param physAddr pointer to the place to store the physical address
+//	\param size the amount of memory being read or written (1, 2
+//	  or 4 Bytes)
+// 	\param writing if true, check the writeAllowed bit
+//      \return Number of the exception raised during address translation
+*/
+//----------------------------------------------------------------------
+ExceptionType
+MMU::Translate(int virtAddr, int* physAddr, int size, bool writing)
+{
+  DEBUG('a', "\tTranslate 0x%x, %s: \n",
+	virtAddr, writing ? "write" : "read");
+  
+  // check for alignment errors
+  if (((size == 4) && (virtAddr & 0x3))
+      || ((size == 2) && (virtAddr & 0x1))){
+    DEBUG('a', "alignment problem at %d, size %d!\n", virtAddr, size);
+    return BusErrorException;
+  }
+
+  // Compute virtual page number and offset in the page
+  int vpn = virtAddr / cfg->PageSize;
+  int offset = virtAddr % cfg->PageSize;
+
+  // If the machine is equipped with a TLB, use directly the TLB
+  // for address translation
+  if (tlb != NULL)
+    {
+      int rpn; // Real page number
+      bool ro; // read-only flag
+      if (tlb->Translate(vpn, &rpn, &ro))
+	{
+	  // Make sure access rights are correct
+	  if (writing && ro) {
+	    DEBUG('a', "write access on read-only virtual page # %d (TLB) !\n",
+		  vpn);
+	    return ReadOnlyException;
+	  }
+
+	  // Make sure physical address is correct
+	  if ((rpn < 0) || (rpn >= cfg->NumPhysPages))
+	    {
+	      DEBUG('a', "MMU/TLB: Translated physical page out of bounds (0x%x)\n",
+		    rpn);
+	      return BusErrorException;
+	    }
+	  
+	  // signal that the page is used / modified
+	  if (writing) physicalMemManager->dirtyPage(rpn);
+	  physicalMemManager->usedPage(rpn);
+
+	  // Return the translated page
+	  *physAddr = rpn*cfg->PageSize + offset;
+	  return NoException;
+	}
+    }
+
+  
+  /*
+   * Otherwise, use the translation table
+   */
+
+  // check the virtual page number
+  if (vpn >= translationTable->getMaxNumPages()) {
+    DEBUG('a', "virtual page # %d too large for page table size %d!\n",
+	  vpn, translationTable->getMaxNumPages());
+    return AddressErrorException;
+  }
+
+  // get the entry of the virtual page in the translation table
+  PageTableEntry * entry = translationTable->getPageTableEntry(vpn);
+  
+  // is the page correctly mapped ?
+  if (!entry->readAllowed && !entry->writeAllowed) {
+    DEBUG('a', "virtual page # %d not mapped !\n", vpn);
+    return AddressErrorException;
+  }
+
+  // If the page is in real memory, update the TLB (if any) now
+  if ((entry->valid) && (tlb != NULL))
+    // Add this (new) translation in the TLB
+    tlb->Add(vpn, entry->physicalPage, !entry->writeAllowed);
+
+  // Check access rights
+  if (writing && !entry->writeAllowed) {
+    DEBUG('a', "write access on read-only virtual page # %d !\n",
+	  vpn);
+    return ReadOnlyException;
+  }
+
+  // If the page is not yet in main memory, run the page fault manager
+  if (!entry->valid) {
+    // Update statistics
+    currentThread->GetProcessOwner()->stat->incrPageFault();
+    DEBUG('p', "Call to PageFaultManager for page number %i\n",
+	  vpn);
+
+    // call the page fault manager
+    ExceptionType except = pageFault->PageFault(vpn);
+    if (except != NoException)
+      return except;
+
+    // entry is now updated
+    entry->valid=true;
+    // the page is now in real memory
+
+    // Update the TLB (if any)
+    if (tlb != NULL)
+      // Add this (new) translation in the TLB
+      tlb->Add(vpn, entry->physicalPage, !entry->writeAllowed);
+  }
+
+  // Make sure physical address is correct
+  if ((entry->physicalPage < 0)
+      || (entry->physicalPage >= cfg->NumPhysPages))
+    {
+      DEBUG('a', "MMU: Translated physical page out of bounds (0x%x)\n",
+	    entry->physicalPage);
+      return BusErrorException;
+    }
+  
+  // signal that the page is used / modified
+  if (writing)
+    physicalMemManager->dirtyPage(entry->physicalPage);
+  physicalMemManager->usedPage(entry->physicalPage);
+
+  *physAddr = entry->physicalPage*cfg->PageSize + offset;
+  DEBUG('a', "phys addr = 0x%x\n", *physAddr);
+  return NoException;
+}
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

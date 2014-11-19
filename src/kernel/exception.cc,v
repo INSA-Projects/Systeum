@@ -1,0 +1,765 @@
+head	1.2;
+access;
+symbols
+	v0:1.1.1.1 Base:1.1.1;
+locks; strict;
+comment	@// @;
+
+
+1.2
+date	2006.01.04.16.17.25;	author pgarcia;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.10.17.18.33.29;	author pgarcia;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2005.10.17.18.33.29;	author pgarcia;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@file system multi thread
+@
+text
+@ /*! \file exception.cc 
+ //  \brief Entry point into the Nachos kernel .
+ //
+ //    There are two kinds of things that can cause control to
+ //    transfer back to here:
+ //
+ //    syscall -- The user code explicitly requests to call a Nachos
+ //    system call
+ //
+ //    exceptions -- The user code does something that the CPU can't handle.
+ //    For instance, accessing memory that doesn't exist, arithmetic errors,
+ //    etc.  
+ //
+ //    Interrupts (which can also cause control to transfer from user
+ //    code into the Nachos kernel) are handled elsewhere.
+ */
+ // Copyright (c) 1992-1993 The Regents of the University of California.
+ // All rights reserved.  See copyright.h for copyright notice and limitation
+ 
+ // of liability and disclaimer of warranty provisions.
+ 
+#include "copyright.h"
+#include "msgerror.h"
+#include "system.h"
+
+
+#include "interrupt.h"
+#include "drvACIA.h"
+#include "drvConsole.h"
+#include "mmu.h"
+#include "oftable.h"
+#include "syscall.h"
+#include "synch.h"
+#include "machine.h"
+#include "filesysmt.h"
+   
+//----------------------------------------------------------------------
+// GetLengthParam
+/*! Returns the length of a string stored in the machine memory,
+//    including the '\0' terminal
+//
+// \param addr is the memory address of the string */
+//----------------------------------------------------------------------
+static int GetLengthParam(int addr) {
+   int i=0;
+   int c=-1;
+   int tmp;
+   
+   // Scan the string until the null character is found
+   while (c != 0) {
+     mmu->ReadMem(addr++,1,&c,false,&tmp);
+     i++;
+   }
+   return i+1;
+ }
+
+//----------------------------------------------------------------------
+// GetStringParam
+/*!	Copies a string from the machine memory
+//
+//	\param addr is the memory address of the string
+//	\param dest is where the string is going to be copied
+//      \param maxlen maximum length of the string to copy in dest,
+//        including the trailing '\0' 
+*/
+//----------------------------------------------------------------------
+static void GetStringParam(int addr,char *dest,int maxlen) {
+   int i=0;
+   int c=-1;
+   int tmp;
+   
+   while ((c != 0) && (i < maxlen)) {
+     // Read a character from the machine memory
+     mmu->ReadMem(addr++,1,&c,false,&tmp);
+     // Put it in the kernel memory
+     dest[i++] = (char)c;
+   }
+   // Force a \0 at the end
+   dest[maxlen-1]='\0';
+ }
+
+ //----------------------------------------------------------------------
+ // ExceptionHandler
+ /*!   Entry point into the Nachos kernel.  Called when a user program
+ //    is executing, and either does a syscall, or generates an addressing
+ //    or arithmetic exception.
+ //
+ //    For system calls, the calling convention is the following:
+ //
+ //    - system call identifier -- r2
+ //    - arg1 -- r4
+ //    - arg2 -- r5
+ //    - arg3 -- r6
+ //    - arg4 -- r7
+ //
+ //    The result of the system call, if any, must be put back into r2. 
+ //
+ //    \param exceptiontype is the kind of exception.
+ //           The list of possible exception are defined in machine.h.
+ //    \param vaddr is the address that causes the exception to occur
+ //           (when used)  
+ */
+ //----------------------------------------------------------------------
+void ExceptionHandler(ExceptionType exceptiontype, int vaddr)
+{
+
+  // Get the content of the r2 register (system call number in case
+  // of a system call
+  int type = machine->ReadIntRegister(2);
+  int tmp;
+
+  switch (exceptiontype) {
+
+  case SyscallException: {
+    // System calls
+    // -------------
+    switch(type) {
+
+	char msg[MAXSTRLEN]; // Argument for the PError system call
+
+	// You will find below all Nachos system calls ...
+
+	case SC_Halt: 
+	  // The halt system call. Stops Nachos.
+	  DEBUG('a', "Shutdown, initiated by user program.\n");
+	  interrupt->Halt(0);
+	  syscallError->SetMsg("",NoError);
+	  return;
+	  
+	case SC_SysTime: {
+	  // The systime system call. Gets the system time
+	  DEBUG('a', "Systime call, initiated by user program.\n");
+	  int addr=machine->ReadIntRegister(4);
+	  unsigned long long tick = stats->getTotalTicks();
+	  unsigned long seconds = (unsigned long)
+	    cycle_to_sec(tick,cfg->ProcessorFrequency);
+	  unsigned long nanos =  (unsigned long)
+	    cycle_to_nano(tick,cfg->ProcessorFrequency);
+	  mmu->WriteMem(addr,sizeof(unsigned long),seconds,&tmp);
+	  mmu->WriteMem(addr+4,sizeof(unsigned long),nanos,&tmp);
+	  syscallError->SetMsg("",NoError);
+	  break;
+	}
+
+	case SC_Exit:{
+          // The exit system call
+	  // Ends the calling thread
+	  DEBUG('t', "Thread 0x%x %s exit call.\n", currentThread,currentThread->GetName());
+	  ASSERT(currentThread->typeId == THREAD_TYPE_ID);
+	  userObj->RemoveItem((int*)currentThread);
+	  currentThread->Finish();
+	  break;
+        }
+
+        case SC_Exec: {
+          // The exec system call
+          // Creates a new process (thread+address space)
+          DEBUG('a', "Process: Exec call.\n");
+	  int addr;
+          int size;
+	  char name[MAXSTRLEN];
+	  int error;
+	  
+	  // Get the process name
+          addr = machine->ReadIntRegister(4);
+          size = GetLengthParam(addr);
+          char ch[size];
+	  GetStringParam(addr,ch,size);	
+	  sprintf(name,"master thread of process %s",ch);
+	  Process * p = new Process(ch, & error);
+	  if (error != NoError)
+	    {
+	      machine->WriteIntRegister(2,-1);
+	      if (error == OutOfMemory)
+		syscallError->SetMsg("",error);
+	      else
+		syscallError->SetMsg(ch,error);
+	      break;
+	    }
+	  Thread *ptThread = new Thread(name);
+	  userObj->Append((int *)ptThread);
+	  error = ptThread->Start(p,
+				  p->addrSpace->GetCodeStartAddress(),
+				  -1);
+	  if (error != NoError)
+	    {
+	      machine->WriteIntRegister(2,-1);	
+	      if (error == OutOfMemory)
+		syscallError->SetMsg("",error);
+	      else
+		syscallError->SetMsg(name,error);
+	      break;
+	    }
+	  syscallError->SetMsg("",NoError);
+	  machine->WriteIntRegister(2,(int)ptThread);	
+	  break;
+        }
+
+	case SC_NewThread:{	  
+	  // The newThread system call
+	  // Create a new thread in the same address space
+	  DEBUG('a', "Multithread: NewThread call.\n");
+	  Thread *ptThread;
+	  int name_addr;
+	  VoidFunctionPtr fun;
+	  int arg;
+	  int err;
+	  // Get the address of the string for the name of the thread
+	  name_addr = machine->ReadIntRegister(4);
+	  // Get the pointer to the function to be executed by the new thread
+	  fun = (VoidFunctionPtr) machine->ReadIntRegister(5);
+	  // Get the function parameters
+	  arg = machine->ReadIntRegister(6);
+	  // Build the name of the thread
+	  int size = GetLengthParam(name_addr);
+	  char thr_name[size];
+	  GetStringParam(name_addr, thr_name, size);
+	  char *proc_name = currentThread->GetProcessOwner()->GetName();
+	  char complete_name[size + 1 + strlen(proc_name)];
+	  snprintf(complete_name, sizeof(complete_name), "%s:%s",
+		   proc_name, thr_name);
+	  // Finally start it
+	  ptThread = new Thread(thr_name);
+	  userObj->Append((int *)ptThread);
+	  err = ptThread->Start(currentThread->GetProcessOwner(),
+				fun, arg);
+	  if (err != NoError) {
+	    machine->WriteIntRegister(2,-1);
+	    syscallError->SetMsg("",err);
+	  }
+	  else {
+	    machine->WriteIntRegister(2,(int) ptThread);	
+	    syscallError->SetMsg("",NoError);
+	  }
+	  break;	   
+	}
+	
+        case SC_Join: {
+	  // The join system call
+          // Wait for the thread idThread to finish
+          DEBUG('a', "Process or thread: Join call.\n");	  
+          Thread* idThread;
+	  idThread = (Thread*)machine->ReadIntRegister(4);
+	  if (userObj->Search((int *)idThread)
+	      && idThread->typeId == THREAD_TYPE_ID)
+	    {
+	      currentThread->Join(idThread);
+	      syscallError->SetMsg("",NoError);
+	      machine->WriteIntRegister(2,0);      
+	    }
+	  else
+	    {
+	      sprintf(msg,"%d",(int)idThread);
+	      syscallError->SetMsg(msg, InvalidThreadId);
+	      machine->WriteIntRegister(2,-1);
+	    }
+	  DEBUG('a',"Fin Join");
+	  break;	   
+        }
+
+	case SC_Yield: {
+	  DEBUG('a', "Process or thread: Yield call.\n");
+	  ASSERT(currentThread->typeId == THREAD_TYPE_ID);
+	  currentThread->Yield();
+	  syscallError->SetMsg("",NoError);
+	  break;
+	}
+	
+	case SC_PError: { 
+	  // the PError system call
+	  // print the last error message
+	  DEBUG('a', "Debug: Perror call.\n");
+	  int size;
+	  int addr;
+	  addr = machine->ReadIntRegister(4);
+	  size = GetLengthParam(addr);
+	  char ch[size];
+	  GetStringParam(addr,ch,size);
+	  syscallError->PrintLastMsg(driverConsole,ch);
+	  break;
+	}
+	  
+        case SC_Create: {
+          // The create system call
+          // Create a new file in nachos file system
+          DEBUG('a', "Filesystem: Create call.\n");	 
+	  int addr;
+	  int size;
+	  int ret;
+	  int sizep;
+	  // Get the name and initial size of the new file
+	  addr = machine->ReadIntRegister(4);
+          size = machine->ReadIntRegister(5);
+          sizep = GetLengthParam(addr);
+	  char ch[sizep];
+          GetStringParam(addr,ch,sizep);
+	  // Try to create it
+          int err = fileSystem->Create(ch,size);
+          if (err == NoError) {
+	    syscallError->SetMsg("",NoError);
+	    ret = 0; 
+	  }
+          else { 
+	      ret = -1; 
+	      if (err == OutOfDisk) syscallError->SetMsg("",err);
+	      else syscallError->SetMsg(ch,err);
+	  }
+	  machine->WriteIntRegister(2,ret);
+          break;
+        }
+         
+        case SC_Open: {
+          // The open system call
+          // Opens a file and returns an openfile identifier
+          DEBUG('a', "Filesystem: Open call.\n");
+	  int addr;
+	  int ret;
+	  int sizep;
+	  // Get the file name
+	  addr = machine->ReadIntRegister(4);
+	  sizep = GetLengthParam(addr);
+	  char ch[sizep];
+	  GetStringParam(addr,ch,sizep);
+	  // Try to open the file
+	  OpenFile *file = fileSystem->Open(ch);
+	  if (file == NULL) {
+	    ret = -1;
+	    syscallError->SetMsg(ch,OpenFileError);
+	  }
+	  else {
+	    userObj->Append((int *)file);
+	    ret = (int) file;
+	    syscallError->SetMsg("",NoError);
+	  }
+	  machine->WriteIntRegister(2,ret); 
+          break;         
+        }
+ 
+	case SC_Read: {
+	 // The read system call
+	 // Read in a file or the console
+	 DEBUG('a', "Filesystem: Read call.\n");
+         int addr;
+         int size;
+         int f;
+         int numread;
+	 // Get the buffer address in the machine memory 
+         addr = machine->ReadIntRegister(4);
+	 // Get the requested size
+         size = machine->ReadIntRegister(5);
+	 // Get the openfile number or 0 (console)
+         f = machine->ReadIntRegister(6);
+         char buffer[size];
+
+	 // Read in a file
+         if (f != ConsoleInput) {
+	   OpenFile *file = (OpenFile *)f;
+	   if (userObj->Search((int *)file) && file->typeId == FILE_TYPE_ID)
+	     {
+	       numread = file->Read(buffer,size);
+	       syscallError->SetMsg("",NoError);
+	     }
+	   else
+	     {
+	     numread = -1;
+	     sprintf(msg,"%d",f);
+	     syscallError->SetMsg(msg,InvalidFileId);
+	     }
+	 }
+	 // Read on the console
+         else {
+	   driverConsole->GetString(buffer,size);
+	   numread = size;
+	   syscallError->SetMsg("",NoError);
+	 }         
+         for (int i=0;i<numread;i++)
+           { //copy the buffer into the emulator memory
+             mmu->WriteMem(addr++,1,buffer[i],&tmp);
+           }         
+         machine->WriteIntRegister(2,numread);
+         break;
+       }
+ 
+	case SC_Write: {
+	  // The write system call
+	  // Write in a file or at the console
+	 DEBUG('a', "Filesystem: Write call.\n");
+         int addr;
+         int size;
+         int f;
+         int c;
+         addr = machine->ReadIntRegister(4);
+         size = machine->ReadIntRegister(5);
+	 //f is the openfileid or 1 (console)
+         f = machine->ReadIntRegister(6);        
+         char buffer [size];
+         for (int i=0;i<size;i++) {
+	   mmu->ReadMem(addr++,1,(int *)(&c),false,&tmp);
+	   buffer[i] = c;
+	 }
+         int numwrite;
+
+	 // Write in a file
+         if (f > ConsoleOutput) {
+	   OpenFile *file = (OpenFile *)f;
+	   if (userObj->Search((int *)file) && file->typeId == FILE_TYPE_ID)
+	     {
+	       //write in file
+	       numwrite = file->Write(buffer,size);
+	       syscallError->SetMsg("",NoError);
+	     }
+	   else
+	     {
+	       numwrite = -1;
+	       sprintf(msg,"%d",f);
+	       syscallError->SetMsg(msg,InvalidFileId);
+	     }
+	 } 
+	 // write at the console
+         else {
+	   if (f==ConsoleOutput) {
+	     driverConsole->PutString(buffer,size);
+	     numwrite = size;
+	     syscallError->SetMsg("",NoError);
+	   }
+	   else {
+	     numwrite = -1;
+	     sprintf(msg,"%d",f);
+	     syscallError->SetMsg(msg,InvalidFileId);
+	   }
+	 }         
+         machine->WriteIntRegister(2,numwrite);
+         break;
+       }
+        
+      case SC_Seek:{
+	// Seek to a given position in an opened file
+	 DEBUG('a', "Filesystem: Seek call.\n");
+         int offset;
+         int f;
+	 int error;
+
+	 // Get the offset into the file
+         offset = machine->ReadIntRegister(4);
+	 // Get the openfile number or 1 (console)
+         f = machine->ReadIntRegister(5);
+
+	 // Seek into a file
+         if (f > 1) {
+	   OpenFile *file = (OpenFile *)f;
+	   if (userObj->Search((int *)file) && file->typeId == FILE_TYPE_ID)
+	     {
+	       file->Seek(offset);
+	       syscallError->SetMsg("",NoError);
+	     }
+	   else
+	     {
+	       error = -1;
+	       sprintf(msg,"%d",f);
+	       syscallError->SetMsg(msg,InvalidFileId);
+	     }
+	   machine->WriteIntRegister(2,error);
+	 } 
+         else {
+	   machine->WriteIntRegister(2,-1);
+	   sprintf(msg,"%d",f);
+	   syscallError->SetMsg(msg,InvalidFileId);
+	 }
+         break;
+       }
+
+	case SC_Close: {
+	  // The close system call
+	  // Close a file
+	  DEBUG('a', "Filesystem: Close call.\n");	
+	  // Get the openfile number
+	  int f = machine->ReadIntRegister(4);
+	  OpenFile *file = (OpenFile *)f;	  
+	  if (userObj->Search((int *)file) && file->typeId == FILE_TYPE_ID)
+	    {
+	      fileSystem->Close(file);
+	      userObj->RemoveItem((int*)file);
+	      delete file;
+	      machine->WriteIntRegister(2,0);
+	      syscallError->SetMsg("",NoError);
+	    }
+	  else
+	    { 
+	      machine->WriteIntRegister(2,-1);
+	      sprintf(msg,"%d",f);
+	      syscallError->SetMsg(msg,InvalidFileId);
+	    }
+	  break;
+	}
+ 
+        case SC_Remove: {
+	  // The Remove system call
+	  // Remove a file from the file system
+	  DEBUG('a', "Filesystem: Remove call.\n");
+	  int ret;
+	  int addr;
+	  int sizep;
+	  // Get the name of the file to be removes
+	  addr = machine->ReadIntRegister(4);
+	  sizep = GetLengthParam(addr);
+	  char *ch = new char[sizep];
+	  GetStringParam(addr,ch,sizep);
+	  // Actually remove it
+	  int err=fileSystem->Remove(ch);
+	  if (err == NoError) {
+	    ret = 0; 
+	    syscallError->SetMsg("",NoError);
+	  }
+	  else {
+	    ret = -1;
+	    syscallError->SetMsg(ch,err);
+	  }
+	  machine->WriteIntRegister(2,ret);
+	  break;
+	}
+
+	case SC_Mkdir:{
+	  // the Mkdir system call
+	  // make a new directory in the file system 
+	  DEBUG('a', "Filesystem: Mkdir call.\n");    
+	  int addr;
+	  int sizep;	  
+	  addr = machine->ReadIntRegister(4);
+	  sizep = GetLengthParam(addr);
+	  char name[sizep];
+	  GetStringParam(addr,name,sizep);         
+	  // name is the name of the new directory
+	  int good = fileSystem->Mkdir(name);
+	  if (good != NoError) {
+	    machine->WriteIntRegister(2,-1);
+	    if (good == OutOfDisk) syscallError->SetMsg("",good);
+	    else syscallError->SetMsg(name,good);
+	  }
+	  else {
+	    machine->WriteIntRegister(2,((int)good));
+	    syscallError->SetMsg("",NoError);
+	  }
+	  break;
+	}
+	
+	case SC_Rmdir:{
+	  // the Rmdir system call
+	  // remove a directory from the file system
+	  DEBUG('a', "Filesystem: Rmdir call.\n");      
+	  int addr;
+	  int sizep; 
+	  addr = machine->ReadIntRegister(4);
+	  sizep = GetLengthParam(addr);
+	  char name[sizep];
+	  GetStringParam(addr,name,sizep);
+	  int good = fileSystem->Rmdir(name);
+	  if (good != NoError) {
+	    machine->WriteIntRegister(2,-1);
+	    syscallError->SetMsg(name,good);
+	  }
+	  else {
+	    machine->WriteIntRegister(2,((int)good));
+	    syscallError->SetMsg("",NoError);
+	  }
+	  break;
+	}
+
+	case SC_FSList: {
+	  // The FSList system call
+	  // Lists all the file and directories in the filesystem
+	  fileSystem->List();
+	  fileSystem->List();
+	  syscallError->SetMsg("",NoError);
+	  break;
+	}
+      
+         
+	case SC_TtySend:{
+	  // the TtySend system call	
+	  // Sends some char by the serial line emulated
+	  DEBUG('a', "ACIA: Send call.\n");
+	  if (cfg->ACIA)
+	  {
+	       int result;
+	       int c;
+	       int i;
+	       int addr=machine->ReadIntRegister(4);
+	       char buff[MAXSTRLEN];
+	       for(i=0;;i++)
+	       {
+	           mmu->ReadMem(addr+i,1,&c,false,&tmp);
+	           buff[i]=(char) c;
+		   if (buff[i] == '\0') break;
+	       }
+	       result=driverACIA->TtySend(buff);
+	       machine->WriteIntRegister(2,result);	
+	       syscallError->SetMsg("",NoError);
+	  }	
+	  else {
+	       machine->WriteIntRegister(2,-1);
+	       syscallError->SetMsg("",NoACIA);
+	  }
+	  break;
+	}
+	
+	case SC_TtyReceive:{
+	  // the TtyReceive system call	
+	  // read some char on the serial line
+	  DEBUG('a', "ACIA: Receive call.\n");
+	  if (cfg->ACIA)
+	  {    int result;
+	       int i=0;	 
+	       int addr=machine->ReadIntRegister(4);
+	       int length=machine->ReadIntRegister(5);
+	       char buff[length+1];
+	       result=driverACIA->TtyReceive(buff,length);
+	       while ((i <= length))
+	       {
+	           mmu->WriteMem(addr,1,buff[i],&tmp);
+	           addr++;
+	           i++;
+	       }
+	       mmu->WriteMem(addr,1,0,&tmp);
+	       machine->WriteIntRegister(2,result);	
+	       syscallError->SetMsg("",NoError);
+	  }	
+	  else {
+	       machine->WriteIntRegister(2,-1);
+	       syscallError->SetMsg("",NoACIA);
+	  }
+	  break;
+	}
+
+       default:
+         printf("Invalid system call number : %d\n", type);
+         exit(-1);
+         break;
+       }
+
+      } 
+
+       // from now, the code is executed whatever system call is invoked
+       // we increment the PC counter
+       machine->int_registers[PrevPCReg]=machine->int_registers[PCReg];
+       machine->int_registers[PCReg]=machine->int_registers[NextPCReg];
+       machine->int_registers[NextPCReg]+=4;
+
+       break;
+     
+       // Other exceptions
+       // ----------------
+   case ReadOnlyException:
+     printf("FATAL USER EXCEPTION (Thread %s, PC=0x%x):\n",
+	    currentThread->GetName(), machine->ReadIntRegister(PCReg));
+     printf("\t*** Write to virtual address 0x%x on read-only page ***\n",
+	    vaddr);
+     interrupt->Halt(-1);
+     break;
+
+  case BusErrorException:
+    printf("FATAL USER EXCEPTION (Thread %s, PC=0x%x):\n",
+	   currentThread->GetName(), machine->ReadIntRegister(PCReg));
+    printf("\t*** Bus error on access to virtual address 0x%x ***\n",
+	   vaddr);
+    interrupt->Halt(-1);
+    break;
+
+  case AddressErrorException:
+    printf("FATAL USER EXCEPTION (Thread %s, PC=0x%x):\n",
+	   currentThread->GetName(), machine->ReadIntRegister(PCReg));
+    printf("\t*** Access to invalid or unmapped virtual address 0x%x ***\n",
+	   vaddr);
+    interrupt->Halt(-1);
+    break;
+
+  case OverflowException:
+    printf("FATAL USER EXCEPTION (Thread %s, PC=0x%x):\n",
+	   currentThread->GetName(), machine->ReadIntRegister(PCReg));
+    printf("\t*** Overflow exception at address 0x%x ***\n",
+	   vaddr);
+    interrupt->Halt(-1);
+    break;
+
+  case IllegalInstrException:
+    printf("FATAL USER EXCEPTION (Thread %s, PC=0x%x):\n",
+	   currentThread->GetName(), machine->ReadIntRegister(PCReg));
+    printf("\t*** Illegal instruction at virtual address 0x%x ***\n", vaddr);
+    interrupt->Halt(-1);
+    break;
+
+  default:
+    printf("Unknown exception %d\n", exceptiontype);
+    interrupt->Halt(-1);
+    break;
+  }
+
+ }
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d35 1
+d325 1
+a325 1
+	  OpenFile *file = openFileTable->Open(ch);
+d481 1
+a481 1
+	      openFileTable->Close(file->GetName());
+d509 1
+a509 1
+	  int err=openFileTable->Remove(ch);
+d533 1
+a533 1
+	  int good=fileSystem->Mkdir(name);
+d556 1
+a556 1
+	  int good=fileSystem->Rmdir(name);
+d572 1
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

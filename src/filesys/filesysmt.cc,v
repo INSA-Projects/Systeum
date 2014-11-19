@@ -1,0 +1,100 @@
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@// @;
+
+
+1.1
+date	2006.01.04.16.20.33;	author pgarcia;	state Exp;
+branches;
+next	;
+
+
+desc
+@file system multi thread
+@
+
+
+1.1
+log
+@file system multi thread
+CVS ----------------------------------------------------------------------
+@
+text
+@#include "filesysmt.h"
+#include "msgerror.h"
+
+
+FileSystemMultiThread::FileSystemMultiThread()
+{ 
+  openFileTable = new OpenFileTable();
+  lock = new Lock("FileSystemMultiThread Lock");
+}
+
+FileSystemMultiThread::~FileSystemMultiThread()
+{ 
+  delete openFileTable;
+  delete lock;
+}
+
+int FileSystemMultiThread::Create(char *name, int initialSize)
+{
+  printf("*** Attention : methode Create non implementee\n");
+  exit(-1);
+}
+
+OpenFile* FileSystemMultiThread::Open(char *name)
+{
+  printf("*** Attention : methode Open non implementee\n");
+  exit(-1);
+}
+
+void FileSystemMultiThread::Close(OpenFile* file)
+{
+  printf("*** Attention : methode Close non implementee\n");
+  exit(-1);
+}
+
+void FileSystemMultiThread::FileLock(OpenFile* file)
+{
+  printf("*** Attention : methode FileLock non implementee\n");
+  exit(-1);
+}
+
+void FileSystemMultiThread::FileRelease(OpenFile* file)
+{
+  printf("*** Attention : methode FileRelease non implementee\n");
+  exit(-1);
+}
+
+int FileSystemMultiThread::Remove(char *name)
+{ 
+  printf("*** Attention : methode Remove non implementee\n");
+  exit(-1);
+} 
+
+void FileSystemMultiThread::List()
+{
+  printf("*** Attention : methode List non implementee\n");
+  exit(-1);
+}
+
+void FileSystemMultiThread::Print()
+{    
+  printf("*** Attention : methode Print non implementee\n");
+  exit(-1);
+} 
+
+int FileSystemMultiThread::Mkdir(char *dirname)
+{ 
+  printf("*** Attention : methode Mkdir non implementee\n");
+  exit(-1);
+}
+
+int FileSystemMultiThread::Rmdir(char *dirname)
+{
+  printf("*** Attention : methode Rmdir non implementee\n");
+  exit(-1);
+}
+@

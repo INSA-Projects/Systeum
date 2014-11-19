@@ -1,0 +1,45 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file fixedpriorityscheduler.cc 
+//  \brief Routines to choose the next thread to run in a system with fixed
+//         priority threads that can be periodic
+//
+//  Not used in the Nachos assignments (just for curiosity)
+//
+*/
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

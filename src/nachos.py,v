@@ -1,0 +1,170 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @# @;
+
+
+1.1
+date     2005.10.17.18.33.28;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.28;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@##############################################################################
+##          Parcours de l'arborescence d'un programme                       ##
+##          et controle des structure #ifdef defini a l'interieur           ##
+##############################################################################
+
+import os, glob,sys,string;
+
+#################################################################################
+# IsLineEmpty:  check if a line is only composed of a \n character
+#################################################################################
+# input  : -> the line
+# output : -> 1 if the line is empty
+#################################################################################
+
+def isLineEmpty(line):
+    return not len(line.split())
+        
+#############################################################################
+## lecture: lit un fichier et en stocke l'ensemble des utilisations a #ifdef
+#############################################################################
+
+def extract(name, macro):
+    fichier = open(name,"r")
+    res     = open(name + ".cut","w")
+
+    # count for the imbricated #ifdef #endif (if necessary)    
+    cpt = 0;
+
+    # dummy variables for information
+    nbLine  = 0
+    nbSaved = 0
+
+    nameMethod = ""
+    
+    #booleen permettant de savoir que l'on attend la fin d'une macro
+    foundMacro = False
+    
+    while 1 :   
+        ligne =  fichier.readline()
+        
+        save = False
+        if not ligne:
+            break
+
+        if not isLineEmpty(ligne):
+            if string.count(ligne,"::"):
+                nameMethod = ligne
+            
+            if not foundMacro:
+                if string.count(ligne,"#ifdef"):
+                    #a macro has been read. Check if it is the one searched
+                    if string.count(ligne,macro):
+                        #it is
+                        foundMacro = True
+                        cpt = cpt + 1
+                        res.write(nameMethod)
+            else:
+                save = True
+                if string.count(ligne,"#ifdef"):
+                    # an ifdef is embedded within the macro we are dealing with
+                    cpt = cpt + 1
+                
+                # theses lines should be saved, if it is not the #endif macro
+                if string.count(ligne, "#endif"):
+                    cpt = cpt - 1
+                
+                    if cpt == 0:
+                        save = False
+                        foundMacro = False
+                        res.write("---------------------\n")
+            
+            if save:
+                res.write(ligne)
+                nbSaved = nbSaved + 1
+        nbLine = nbLine + 1
+
+    #check if the process finished correctly
+    res.close()
+    fichier.close()
+    if cpt == 0:
+        print "Fichier " + name + " : " +  str(nbLine) + " lignes lues" + \
+              ", " + str(nbSaved) + " lignes sauvees dans " + name + ".cut"
+    else:
+        print "Prb durant le traitement de  " + file
+        print "La macro traitee ne s'est pas finie correctement"
+        print "Le fichier resultat peut etre corrompu!"
+    
+
+
+#############################################################################
+## main : lance le traitement du programme                                 ##
+#############################################################################
+
+usage = """
+Script cutNachos : extrait d'un fichier le code defini entre les 
+                   macros #ifdef et #endif
+
+Usage  : cutNachos [string] [file]+ 
+string : nom de la macro a consider
+file   : fichier a traiter (au moins un fichier)
+"""
+
+os.system("clear") 
+
+# 1 or 2 parameters should be given to the script
+if ((len (sys.argv)) <=2) :
+    print "Mauvais parametres :  "
+    print sys.argv
+    print usage
+    print "Bye bye"
+    sys.exit(0)
+
+# initialiaze variables
+
+macro = sys.argv[1].strip()
+
+numFile = len(sys.argv)
+iter = 2
+
+print "\nTraitement de " + str(numFile-2) + " fichiers\n"
+
+while iter < numFile:
+    fileName = sys.argv[iter]
+    #check if the file exists
+    if not os.path.isfile(fileName):
+        print "Nom donne : " + fileName + " n'est pas un fichier !"
+    else:
+        extract(fileName,macro)
+    iter = iter + 1
+
+print "\nFin du traitement " 
+print "Verifiez tout de meme le(s) fichier(s) resultat(s) \n"
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

@@ -1,0 +1,62 @@
+head	1.2;
+access;
+symbols
+	v0:1.1.1.1 Base:1.1.1;
+locks; strict;
+comment	@# @;
+
+
+1.2
+date	2006.01.04.16.17.16;	author pgarcia;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.10.17.18.33.32;	author pgarcia;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2005.10.17.18.33.32;	author pgarcia;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@file system multi thread
+@
+text
+@# NOTE: this is a GNU Makefile.  You must use "gmake" rather than "make".
+
+OBJS = directory.o filehdr.o filesys.o fsmisc.o oftable.o openfile.o filesysmt.o
+
+archive.a: $(OBJS)
+
+TOPDIR = ../
+include $(TOPDIR)/Makefile.kernel
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d3 1
+a3 1
+OBJS = directory.o filehdr.o filesys.o fsmisc.o oftable.o openfile.o
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

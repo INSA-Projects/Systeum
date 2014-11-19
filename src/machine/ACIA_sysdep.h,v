@@ -1,0 +1,96 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file ACIA_sysdep.h
+    \brief Data structure to simulate the system dependent part of the
+    simulation of an Asynchronous Communicating Interface Adapter.
+  
+    The system dependent ACIA provides emissions and receptions of 
+    char via a simulated serial link. Il will be implemented by using 
+    sockets through the net. An emission and a reception can be 
+    parallelized (full duplex operation). 
+    All the accesses to the sockets are already defined in the module
+    sysdep.h, so they will just have to be renamed.
+  
+    DO NOT CHANGE -- part of the machine emulation
+  
+    Copyright (c) 1999-2000 INSA de Rennes.
+    All rights reserved.  
+    See copyright_insa.h for copyright notice and limitation 
+    of liability and disclaimer of warranty provisions.
+*/
+
+#ifndef _ACIA_SIM
+#define _ACIA_SIM
+
+// Forward declaration
+class ACIA;
+
+class ACIA_sysdep{
+ public:
+  /*! Initializes a system dependent part of the ACIA.
+   * \param interface the non-system dependent part of the Acia simulation
+  */
+  ACIA_sysdep(ACIA *interface);
+  // Deallocates it and close the socket.
+  ~ACIA_sysdep();
+
+  /*! Check if there is incoming char. Schedule itself in order to be executed 
+    in a while. This cycle start when the ACIA_sysdep object is created.
+   */
+  void InterruptRec(); 
+    
+  /*! Send a char through the socket and drain the output register
+   */
+  void InterruptEm();
+
+  /*! Schedule an interrupt in order to simulate the output register dumping.
+   */
+  void SendChar();
+
+  /*! Simulate the input register draining.
+   */
+  void Drain();
+
+ private:  
+  ACIA *interface;
+  int sock; //!< UNIX socket number for incoming/outgoing packets.
+  char sockName[32]; //!< File name corresponding to UNIX socket.
+};
+
+#endif // _ACIA_SIM
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

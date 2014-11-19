@@ -1,0 +1,411 @@
+head	1.2;
+access;
+symbols
+	v0:1.1.1.1 Base:1.1.1;
+locks; strict;
+comment	@// @;
+
+
+1.2
+date	2006.01.04.16.17.16;	author pgarcia;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.10.17.18.33.32;	author pgarcia;	state Exp;
+branches
+	1.1.1.1;
+next	;
+
+1.1.1.1
+date	2005.10.17.18.33.32;	author pgarcia;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.2
+log
+@file system multi thread
+@
+text
+@/*! \file oftable.cc
+// \brief Routines for managing the open file table.
+//
+// The open file table is used to synchronize all the 
+// access to the files. When a file is open, every read 
+// or write will use this class synchronisation methods
+//
+//  Copyright (c) 1999-2000 INSA de Rennes.
+//  All rights reserved.  
+//  See copyright_insa.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+*/
+
+#include <string.h>
+
+#include "msgerror.h"
+#include "oftable.h"
+#include "bitmap.h"
+#include "directory.h"
+#include "filesys.h"
+#include "system.h"
+
+//----------------------------------------------------------
+//OpenFileTableEntry::OpenFileTableEntry()
+/*! initialize an open file table entry.
+*/
+//----------------------------------------------------------
+OpenFileTableEntry::OpenFileTableEntry()
+{
+  valid = false;
+  name = new char[cfg->MaxFileNameSize];
+  numthread = 1;
+  ToBeDeleted = false;
+  lock = new Lock("File Synchronisation");
+  sector = -1;  
+}
+
+//----------------------------------------------------------
+//OpenFileTableEntry::~OpenFileTableEntry()
+/*! Delete an entry
+*/
+//----------------------------------------------------------
+OpenFileTableEntry::~OpenFileTableEntry() 
+{
+  delete [] name;
+  delete lock;
+}
+
+//----------------------------------------------------------
+//OpenFileTable::OpenFileTable()
+/*! initialize the open file table.
+*/
+//----------------------------------------------------------
+OpenFileTable::OpenFileTable()           
+{
+}
+
+
+//----------------------------------------------------------
+//OpenFileTableEntry* OpenFileTable::NextEntry()
+/*! this function looks in the table where 
+//  it is possible to add a new entry
+//
+// \return the next valid entry in the table
+*/
+//----------------------------------------------------------
+OpenFileTableEntry* OpenFileTable::NextEntry()
+{
+  int i=0;
+  while(i<NBOFTENTRY)
+    {
+      if (table[i].valid == false) {
+	table[i].valid = true;
+	return &table[i];
+      }
+      i++;
+    }
+  return NULL;
+}
+
+//----------------------------------------------------------
+//OpenFileTableEntry* OpenFileTable::Findl(char *name)
+/*!find a file in the table return
+//
+// \return NULL if the file is not in the table
+//         or its place in the table if it was already opened
+// \param name is the name of the file we want to find 
+*/
+//----------------------------------------------------------
+OpenFileTableEntry* OpenFileTable::Findl(char *name)
+{
+  int i=0;
+  while(i<NBOFTENTRY)
+    {
+      if(table[i].valid)
+	if(strcmp(table[i].name,name)==0) return &table[i]; 
+      i++;
+    }
+  return NULL;
+}
+
+void OpenFileTable::RemoveEntry(char* name)
+{
+  int i=0;
+  while(i<NBOFTENTRY)
+    {
+      if(table[i].valid)
+	if(strcmp(table[i].name,name)==0) table[i].valid = false; 
+      i++;
+    }
+}
+
+bool OpenFileTable::IsFull()
+{
+  int i=0;
+  while(i<NBOFTENTRY)
+    {
+      if(table[i].valid == false) return false;
+      i++;
+    }
+  return true;
+}
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d30 6
+a35 4
+  name=new char[cfg->MaxFileNameSize];
+  numthread=1;
+  file=NULL;
+  sector=-1;  
+d40 1
+a40 3
+/*! Delete an entry and delete the file from
+// the file system if the boolean ToBeDeleted is
+// set to true.
+a44 9
+      // Get the freemap from disk
+      BitMap freeMap(NUM_SECTORS);
+      freeMap.FetchFrom(fileSystem->GetFreeMapFile());
+      
+      // Indicate that some sectors are freed due to the file deletion
+      file->GetFileHeader()->Deallocate(&freeMap);
+      freeMap.Clear(sector);
+      // Write the freemap back to disk
+      freeMap.WriteBack(fileSystem->GetFreeMapFile());
+d46 1
+a46 1
+  delete file;
+a55 112
+  for (int i = 0 ; i < NBOFTENTRY ; i++)
+    table[i] = NULL;
+  nbentry=0;
+}  
+//----------------------------------------------------------
+//void OpenFileTable::Open(char *name,Openfile *file)
+/*! check if the file is already open
+// and if not creates a new entry in
+// the table.
+//
+// \return the open file
+// \param name is the name of the file 
+// \param file is an Openfile object to strore in the table
+*/
+//----------------------------------------------------------
+OpenFile * OpenFileTable::Open(char *name)
+{    
+  OpenFile *newfile = NULL;
+  int num,sector,dirsector;
+  char filename[cfg->MaxFileNameSize];
+  
+  // Find the file in the open file table
+  num=findl(name);
+  DEBUG('f',"opening file %s\n",name);
+  if (num!=-1)
+  {
+    // The file is opened by another thread
+	// Update the reference count and return an OpenFile
+	table[num]->numthread++;
+	newfile = new OpenFile(table[num]->sector);
+	newfile->SetName(name);
+	DEBUG('f',"File %s was in the table\n",name);
+	return newfile;
+  }
+ else 
+   { if (nbentry!=-1)                         // there is some place in the table
+     {  
+       OpenFileTableEntry *entry = new OpenFileTableEntry;
+       OpenFile *openfile = NULL;
+       Directory directory(cfg->NumDirEntries);
+
+       strcpy(entry->name,name);
+       strcpy(filename,name);
+
+       // Find the directory containing the file and read it from the disk
+       dirsector = FindDir(filename);
+       if (dirsector == -1) return NULL;
+       OpenFile dirfile(dirsector);
+       directory.FetchFrom(&dirfile);
+
+       // Find the file in the directory
+       sector=directory.Find(filename);
+       if (sector >= 0)
+	 { 		
+	   openfile = new OpenFile(sector);	// name was found in directory 
+	   if (openfile->isDir())               // name is a directory ...
+	     {
+	       delete openfile;
+	       delete entry;
+	       return NULL;
+	     }
+	 }
+       else                                    // name isn't in directory
+	 {
+	   delete entry;
+	   return NULL;
+	 }
+
+       // We found the file
+       newfile = new OpenFile(sector);        // we fill the new entry
+       newfile->SetName(name);
+       openfile->SetName(name);
+       entry->sector=sector;
+       entry->file=openfile;
+       table[nbentry]=entry;
+       nbentry=next_entry();
+
+       DEBUG('f',"File %s has been opened successfully\n",name);
+       return newfile;
+     }
+   else 
+     {
+       printf("OFT OPEN: File %s cannot be opened ",name);
+       return NULL;
+     }
+   }
+}
+
+//----------------------------------------------------------
+//void OpenFileTable::Close(char *name)
+/*! called when a thread closes a file : this method
+// decrease numthread and if it is null then the entry is 
+// deleted.
+// \param name is the name of the file to close
+*/
+//----------------------------------------------------------
+void OpenFileTable::Close(char *name)
+{
+  int num;
+  DEBUG('f',"Closing File %s \n",name);
+  num=findl(name);
+  if (num!=-1)     // the file is in the table
+    {
+      table[num]->numthread--;       // the thread has no longer this file opened
+      if (table[num]->numthread<=0)  // if no threads has this file opened
+	{
+	  DEBUG('f',"File %s is no more in the table\n",name);
+	  delete table[num];         // then remove it from the table
+	  table[num]=NULL;
+	}
+      DEBUG('f',"File %s has been closed successfully\n",name);
+    }
+d58 1
+d60 3
+a62 3
+//void OpenFileTable::Lock(char *name)
+/*! Lock the access to a file. It is used to 
+// synchronise reads and writes.
+d64 1
+a64 1
+// \param name is the name of the file we want to lock
+d67 1
+a67 1
+void OpenFileTable::FileLock(char *name)
+d69 10
+a78 2
+  printf("**** Attention: FileLock non implemente\n");
+  exit(-1);
+d82 1
+a82 13
+//void OpenFileTable::Release(char *name
+/*!release the lock after the disk operation
+//
+// \param name is the name of the file we want to unlock 
+*/
+//----------------------------------------------------------
+void OpenFileTable::FileRelease(char *name)
+{
+  printf("**** Attention: FileRelease non implemente\n");
+  exit(-1);
+}
+//----------------------------------------------------------
+//int OpenFileTable::findl(char *name)
+d85 1
+a85 1
+// \return -1 if the file is not in the table
+d90 1
+a90 1
+int OpenFileTable::findl(char *name)
+d95 3
+a97 3
+      if(table[i]!=NULL)
+	if(strcmp(table[i]->name,name)==0) return i; 
+      i++;  
+d99 1
+a99 1
+      return -1;
+d102 9
+a110 35
+//----------------------------------------------------------
+//bool OpenFileTable::Remove(char *name
+/*! remove the file from the directory  and put ToBeDeleted 
+//  to true. after removing a file nobody can open the
+//  deleted file but every thread wich has it open can
+//  access the datas. The data on disk will be deleted
+//  only after every thread had closed this file.
+//
+// \return NoError if the file has been successfuly removed
+// \param name is the name of the file we want to delete
+*/
+//----------------------------------------------------------
+int OpenFileTable::Remove(char *name)
+{    
+  Directory directory(cfg->NumDirEntries);
+  int num,sector,dirsector;
+  char filename[cfg->MaxFileNameSize];
+
+  DEBUG('f', "Removing file %s\n",name);
+  strcpy(filename,name);
+
+  // Find the directory containing the file
+  dirsector=FindDir(filename);
+  if (dirsector == -1) return InexistFileError;
+
+  // Fetch it from disk
+  OpenFile dirfile(dirsector);
+  directory.FetchFrom(&dirfile);
+  sector = directory.Find(filename);
+  if (sector == -1) return InexistFileError; // file not found 
+
+  // Scan the open file table
+  num=findl(name);
+      return (fileSystem->Remove(name));
+  return NoError;
+d112 2
+a113 9
+//----------------------------------------------------------
+//int OpenFileTable::next_entry()
+/*! this function looks in the table where 
+//  it is possible to add a new entry
+//
+// \return the next valid entry in the table
+*/
+//----------------------------------------------------------
+int OpenFileTable::next_entry ()
+d118 1
+a118 1
+      if (table[i]==NULL) return i;
+d121 1
+a121 1
+  return -1;
+a122 1
+
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

@@ -1,0 +1,153 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.32;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.32;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file config.h
+    \brief Data structures for setting up the Nachos hardware and
+	software configuration
+  
+    Copyright (c) 1999-2000 INSA de Rennes.
+    All rights reserved.  
+    See copyright_insa.h for copyright notice and limitation 
+    of liability and disclaimer of warranty provisions.
+*/
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#include "stdio.h"
+#include "translationtable.h"
+#include "filesys.h"
+
+#ifdef CACHELOCKING
+// Champs pour calculer les temps d'exécution des instructions
+// On peut faire des OU bit à bit dessus
+// FETCH : on compte le temps de chargement (accès au cache d'instructions
+//   ou memoire selon la configuration
+#define FETCH  1
+// MEMORY : on compte le temps des accès memoire à l'instruction
+#define MEMORY 2
+#endif // CACHELOCKING
+
+#define MAXSTRLEN 100
+#define CONFIGFILENAME "nachos.cfg"
+
+/*! \brief Defines Nachos hardware and software configuration */
+class Config {
+
+ public:
+
+  int PageSize;            //!< the memory page size (do not modify)
+  int NumPhysPages;        //!< the number of physical memory page
+  int MaxVirtPages;        //!< the maximum number of virtual pages in each address space
+  TranslationMode TableType; //!< the translation table mode (SingleLevel or DualLevel)
+  int BookSize;            //!< the number of entries in the book table (in DualLevel mode)
+  int TLBSize;             //!< the number of entry in the TLB
+
+  int SectorSize;          //!< the disk sector size (do not modify)
+  int NumDirect;           //!< the number of data sectors storable in the first header sector
+  int MaxFileSize;         //!< the maximum length of a file (now unused)
+
+  int MaxFileNameSize;     //!< the maximum length of a file name including the path
+  int NbCopy;              //!< the number of file to copy
+  int NumDirEntries;       //!< the maximum number of file in a directory
+  int DirectoryFileSize;   //!< the length of a directory file
+  int ProcessorFrequency;  //!< the frequency of the processor (MHz)
+  int MagicNumber;         //!< 0x456789ab
+  int MagicSize;           //!< size of an integer 
+  int DiskSize;            //!< the total size of the disk
+  int NumPortLoc;	   //!< local ACIA's port number
+  int NumPortDist;	   //!< distant ACIA's port number
+
+  bool TimeSharing;        //!< use the time sharing mode if true (1)
+  int  AddressDump;        //!< dump all the virtual addresses used if true
+  bool ExistTLB;           //!< use a tlb if true
+  bool PrintStat;          //!< print the stats if true
+  bool FormatDisk;         //!< format the disk if true
+  bool ListDir;            //!< list all the files and directories in the file system if true
+  bool PrintFileSyst;      //!< print all the files in the file system if true
+  bool Print;              //!< print  FileToPrint if true
+  bool Remove;             //!< remove FileToRemove if true
+  bool MakeDir;            //!< make DirToMake if true
+  bool RemoveDir;          //!< remove DirToRemove if true
+  bool ACIA;               //!< use ACIA if true
+
+  char ToCopyUnix[100][MAXSTRLEN];        //!< the table of file to copy from the UNIX filesystem
+  char ToCopyNachos [100][MAXSTRLEN];     //!< the table of file to copy to the nachos filesystem
+  char TargetMachineName[MAXSTRLEN];     //!< the name of the target machine for the ACIA
+  char ProgramToRun[MAXSTRLEN];          //!< the name of the program to execute
+  char FileToPrint[MAXSTRLEN];           //!< the name of the file to print
+  char FileToRemove[MAXSTRLEN];          //!< the name of the file to remove
+  char DirToMake[MAXSTRLEN];             //!< the name of the directory to make
+  char DirToRemove[MAXSTRLEN];           //!< the name of the directory to remove
+ 
+#ifdef CACHELOCKING
+  // Instruction cache
+  bool ICacheTraceDump;    //!< Trace all the accesses in the cache if true
+  bool ICacheOn;           //!< true if an instruction cache is used
+  bool ICacheLocked;       //!< true if programs have run with a locked cache
+  int ICacheLineSize;       //!< the size of a line in the instruction cache
+  int ICacheNbLines;        //!< total size of the cache in cache lines
+  int ICacheNbWays;         //!< cache associativity
+  int ITHit;               //!< execution time of an instr in case of hit
+  int ITMiss;              //!< execution time of an instr in case of miss
+  // Data cache
+  bool DCacheTraceDump;    //!< Trace all the accesses in the cache if true
+  bool DCacheOn;           //!< true if an instruction cache is used
+  bool DCacheLocked;       //!< true if programs have run with a locked cache
+  int DCacheLineSize;       //!< the size of a line in the instruction cache
+  int DCacheNbLines;        //!< total size of the cache in cache lines
+  int DCacheNbWays;         //!< cache associativity
+  int DTHit;               //!< execution time of an instr in case of hit
+  int DTMiss;              //!< execution time of an instr in case of miss
+  // Pour savoir comment sont calculés les temps des instructions
+  int TimeModel;
+  // For the execution of periodic task sets
+  bool PeriodicTaskSet;    //!< true if periodic tasks are to be executed
+  char UtilCpuFile[MAXSTRLEN]; //!< File for dumping CPU utilization
+  float UtilCpuMaxDelta;   //!< Delta in CPU utilization for stopping
+#endif // CACHELOCKING
+  
+  Config(char *configname);
+  ~Config();
+  
+ private:
+  
+  FILE *cfg;
+  char *name;
+};
+
+#endif // CONFIG_H
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

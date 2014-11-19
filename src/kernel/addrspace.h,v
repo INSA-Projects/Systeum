@@ -1,0 +1,116 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file  addrspace.h 
+    \brief Data structures to keep track of the memory resources
+           of executing user programs (address spaces).
+
+           Don't look at this code in the first assignment.
+
+    Copyright (c) 1992-1993 The Regents of the University of California.
+    All rights reserved.  See copyright.h for copyright notice and limitation 
+    of liability and disclaimer of warranty provisions.
+*/
+
+#ifndef ADDRSPACE_H
+#define ADDRSPACE_H
+
+#include "copyright.h"
+
+
+// Forward references
+class Thread;
+class Semaphore;
+class OpenFile;
+class Process;
+
+#define USERSTACKSIZE 8*1024 	//!< Size of thread size (increase it if required)
+
+/*! \brief Defines the data structures to keep track of  memory resources
+        of executing user programs (address spaces).
+ */
+class AddrSpace {
+public:
+  
+  AddrSpace(OpenFile *execFile, Process *p, int * err);
+               //!< Constructor. Create an address space,
+               //!< initializing it with the program
+               //!< stored in the file "executable"
+
+  ~AddrSpace();	
+	       //!< De-allocate an address space
+
+  int StackAllocate();                  
+               //!< Allocate a new stack (will be changed
+               //!< in the virtual memory assignment)
+
+  void SaveState();			
+               //!< Save address space-specific
+               //!< info on a context switch: to be filled-in in the
+               //!< virtual memory assignment
+  void RestoreState();		
+               //!< Restore address space-specific
+               //!< info on a context switch: to be filled-in in the
+               //!< virtual memory assignment
+
+  //! Address of the default first instruction to execute
+  VoidFunctionPtr GetCodeStartAddress()
+  { return codeStartAddress; }
+
+  TranslationTable *translationTable;   /*!< page table translation */
+
+private:
+  VoidFunctionPtr codeStartAddress; //!< Code start address
+
+  int Alloc(int numPages); /*!< allocate numPages virtual pages in the
+                                current address space */
+
+  int freePageId; /*!< Number of the next virtual page allocated.
+                    Virtual addresses are simply allocated : an
+		    allocation will simply increment this address by
+		    the size of the allocated object */
+
+  /* The corresponding process (for debug only) */
+  Process *process;
+
+
+};
+
+#endif // ADDRSPACE_H
+
+
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

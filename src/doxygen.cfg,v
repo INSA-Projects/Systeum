@@ -1,0 +1,48 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @# @;
+
+
+1.1
+date     2005.10.17.18.33.28;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.28;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@PROJECT_NAME    = "Nachos"
+WARNINGS        = NO
+PERL_PATH       = /usr/bin/perl
+GENERATE_LATEX  = YES
+GENERATE_HTML   = YES
+EXTRACT_PRIVATE = YES
+BRIEF_MEMBER_DESC = NO
+EXTRACT_ALL      = YES
+INPUT            = drivers/ kernel/ machine/ userlib/ vm/ utility/ filesys/
+FILE_PATTERNS    = *.h *.cc
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

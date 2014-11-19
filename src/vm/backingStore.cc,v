@@ -1,0 +1,230 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@//-----------------------------------------------------------------
+/*! \file  swap.cc
+//  \brief Routines of the swap manager
+//
+//  Copyright (c) 1999-2000 INSA de Rennes.
+//  All rights reserved.  
+//  See copyright_insa.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+//
+*/
+//-----------------------------------------------------------------
+ 
+#include <unistd.h>
+
+#include "bitmap.h"
+#include "drvDisk.h"
+#include "thread.h"
+#include "backingStore.h"
+
+//-----------------------------------------------------------------
+// BackingStore::BackingStore
+//
+/*! Initialize the page_flags bitmap to specify that the sectors
+//  of the swapping area are free
+*/
+//-----------------------------------------------------------------
+BackingStore::BackingStore() {
+
+  disk = new DriverDisk("Swap DISK");
+  page_flags = new BitMap(NUM_SECTORS);
+
+}
+
+//-----------------------------------------------------------------
+// BackingStore::~BackingStore
+//
+/*! De-allocate the page_flags bitmap
+*/
+//-----------------------------------------------------------------
+BackingStore::~BackingStore() {
+
+  delete page_flags;
+  delete disk;
+
+}
+
+//-----------------------------------------------------------------
+// int BackingStore::get_next_free_page()
+//
+/*! This method is called by put_page_swap() and returns the
+//  first free sector of the swapping area according to the
+//  page_flags bitmap
+//
+//  \return the first free page number, or -1 if there is no
+//          available page
+*/
+//-----------------------------------------------------------------
+int BackingStore::get_next_free_page() {
+  
+  for (int i=0;i<NUM_SECTORS;i++) {
+    if (! page_flags->Test(i)) {
+      // the page #i is free
+	page_flags->Mark(i);
+      return i;
+    }
+  }
+
+  // there is no available page
+  return -1;
+}
+
+//-----------------------------------------------------------------
+// void BackingStore::release_page_swap
+//
+/*! This method frees an unused page by modifying the page_flags
+//  bitmap. We want to use this when we kill a process and 
+//  de-allocate its memory pages.
+//
+//  \param num_sector is the sector number we want to free
+*/
+//-----------------------------------------------------------------
+void BackingStore::release_page_swap(int num_sector) {
+
+  DEBUG('w',"Swap page %i released for thread \"%s\"\n",num_sector,
+	currentThread->GetName());
+  // clear the #num_sector bit of page_flags
+  page_flags->Clear(num_sector);
+
+}
+
+//-----------------------------------------------------------------
+// BackingStore::get_page_swap
+//
+/*!  Access a page in the swapping area and transfer its data into 
+//   the buffer SwapPage.
+// 
+//  \param num_sector is the sector number of the wanted page,
+//  \param SwapPage is the buffer to fill.
+*/
+//-----------------------------------------------------------------
+void BackingStore::get_page_swap(int num_sector ,char* SwapPage ) {
+  
+  DEBUG('w',"Reading swap page %i for \"%s\"\n",num_sector,
+	currentThread->GetName());
+  disk->ReadSector(num_sector,SwapPage);
+}
+
+//-----------------------------------------------------------------
+// BackingStore::put_page_swap
+//
+/*! This method puts a page into the swapping area. If the sector
+//  number given in parameters is set to -1, the swap manager
+//  chooses a free sector and return its number.
+//  
+//  \param num_sector is the sector number used in the swapping area,
+//  \param SwapPage is the buffer to transfer in the swapping area.
+//  \return The sector number used in the swapping area. This number
+//          is used to update the field disk_page in the translation 
+//          table entry.
+*/
+//-----------------------------------------------------------------
+int BackingStore::put_page_swap(int num_sector,char *SwapPage) {
+
+  if (num_sector >= 0) {
+    DEBUG('w',"Writing swap page %i for \"%s\"\n",num_sector,
+	    currentThread->GetName());
+    disk->WriteSector(num_sector,SwapPage);
+    return num_sector;
+  }
+  else {
+    int newpage = get_next_free_page();
+    if (newpage == -1) {
+      return -1;
+    }
+    else {
+      DEBUG('w',"Writing swap page %i for \"%s\"\n",newpage,
+	    currentThread->GetName());
+      disk->WriteSector(newpage,SwapPage);
+      return newpage;
+    }
+  }		 
+}
+
+//-----------------------------------------------------------------
+// BackingStore::get_page_file
+//
+/*! This method transfer a code or data page from a program file
+//  to a buffer. It is used in order to prevent the system from
+//  saving code pages in the swapping area.
+//
+//  \param offset is the offset to use to find the page in the 
+//         program file
+//  \param file_name is the program file name
+//  \param SwapPage is the buffer to fill with the wanted page
+//
+//  \return -1 if there is a process error.
+*/
+//-----------------------------------------------------------------
+int BackingStore::get_page_file(int offset,OpenFile *exec_file, char *SwapPage)
+{
+  int numread;
+     
+  DEBUG('w',"Reading offset code %i for \"%s\"\n",offset,
+	    currentThread->GetName());
+  // Read the buffer page
+  numread = exec_file->ReadAt(SwapPage,cfg->PageSize,offset);
+
+  // Check the # of actually read bytes
+  if (numread != cfg->PageSize) {
+    return -1;
+  }
+  else {
+    return 0;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

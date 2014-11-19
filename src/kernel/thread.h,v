@@ -1,0 +1,200 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file thread.h
+    \brief Data structures for managing threads
+      
+        A thread represents sequential execution of code within a program.
+  	So the state of a thread includes the program counter,
+  	the processor registers, and the execution stack.
+  	
+        A thread running a user program actually has *two* sets of CPU
+        registers -- one for its state while executing user code, one
+        for its state while executing kernel code.
+  
+   	Note that because we allocate a fixed size stack for each
+  	thread, it is possible to overflow the stack -- for instance,
+  	by recursing to too deep a level.  
+  	
+  	One thing to try if you find yourself with seg faults is to
+  	increase the size of thread kernel stack -- KERNELSTACKSIZE.
+  
+ Copyright (c) 1992-1993 The Regents of the University of California.
+ All rights reserved.  See copyright.h for copyright notice and limitation 
+ of liability and disclaimer of warranty provisions.
+*/
+
+class Thread;
+
+#ifndef THREAD_H
+#define THREAD_H
+
+#include "copyright.h"
+#include "utility.h"
+#include "system.h"
+
+#include "machine.h"
+#include "stats.h"
+#include "process.h"
+
+// CPU register state to be saved on context switch. 
+#define MACHINESTATESIZE 18
+
+// Size of the thread's kernel execution stack
+#define KERNELSTACKSIZE	(32 * 1024) // in Bytes
+
+// External function, dummy routine whose sole job is to call Thread::Print.
+extern void ThreadPrint(int arg);	 
+
+class Semaphore;
+class Process;
+
+/*! \brief Defines the kernel context
+// *** Kernel context (host computer, SPARC) ***
+// ---------------------------------------------
+// The first 3 members correspond to the thread kernel context
+// (stack, machine registers and stack pointer). As the kernel
+// does not execute on the emulated MIPS processor, all values
+// in the kernel context correspond to entities of the host computer
+// (here, SPARC or i386)
+*/
+typedef struct {
+  //! The current stack pointer address.
+  unsigned long int stackPointer;
+  
+  //! All registers except for stackTop.		 
+  int machineState[MACHINESTATESIZE]; 
+  
+  //! Bottom address of the stack.
+  unsigned long int stackBottom;
+  
+  //! Size of the stack.
+  unsigned long int stackSize;
+
+} KernelContextT;
+
+
+/*! \brief Defines the User context (MIPS virtual machine)
+// *** User context (emulated computer, MIPS) ***
+// ---------------------------------------------
+*/
+typedef struct {
+  //! Only for user-program. Integer CPU register state (value of
+  //  MIPS registers)
+  int intRegisters[NumIntRegs];
+
+  //! Floating point general purpose registers
+  int floatRegisters[NumFPRegs];
+
+  //! Floating point condition code.
+  char cc;
+} UserContextT;
+
+
+/*! \brief Data structures for managing threads  
+ *  
+ *  Every thread has:
+ *      a user context (MIPS), a kernel context (Sparc/i386)
+ */
+class Thread {
+public:
+  //! Build an empty thread
+  Thread(char *debugName);
+  
+  //! Deallocate a Thread.
+  virtual ~Thread(); 				
+
+  //! Start a thread, attaching it to a process (return NoError on success)
+  virtual int Start(Process *owner, VoidFunctionPtr func, int arg);
+
+  //! Wait for another thread to finish its execution
+  void Join(Thread *IdThread);
+
+  //! Relinquish the CPU if any other thread is runnable.
+  void Yield();  			
+    
+  //! Put the thread to sleep and relinquish the processor 
+  void Sleep();  			
+    
+  //! Finish the execution of the thread, and prepare its deallocation
+  virtual void Finish();  				
+    
+  //! Check if a thread has overflowed its kernel stack.
+  void CheckOverflow();    
+   
+  //! Sets-up the thread kernel context : fills it with the appropriate
+  //  values such that the low-level context switch executes function
+  //  StartThreadExecution.
+  void InitKernelContext(char* stackAddr,
+			 unsigned long int stackSize);
+
+  //! Initialize user-level CPU registers,
+  //  before jumping to user code
+  void InitUserContext(int initialPCREG,int initialSP, int arg);
+
+  //! Save user-level register state.
+  void SaveUserState();	
+    
+  //! Restore user-level register state.
+  void RestoreUserState();
+
+  char* GetName() { return (name); }
+  Process* GetProcessOwner() { return process; }
+  KernelContextT* GetKernelContext() { return & kernelContext; }
+
+protected:
+  //! Thread name (for debugging)   
+  char* name;
+
+  //! Main resource container the thread is running in.
+  Process *process;
+
+  //! Thread Kernel context
+  KernelContextT kernelContext;
+
+  //! Thread User context
+  UserContextT userContext;
+
+public:
+  //! signature to make sure the thread is in the correct state
+  ObjectTypeId typeId;
+
+  int userStackPointer;
+};
+
+#endif // THREAD_H
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

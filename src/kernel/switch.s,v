@@ -1,0 +1,421 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @# @;
+
+
+1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/* switch.s 
+ *   	Machine dependent context switch routines.  DO NOT MODIFY THESE! 
+ *
+ *	Context switching is inherently machine dependent, since
+ *	the registers to be saved, how to set up an initial
+ *	call frame, etc, are all specific to a processor architecture.
+ *
+ * 	This file currently supports the following architectures:
+ *	    SUN SPARC, INTEL 80386
+ *
+ * We define two routines for each architecture:
+ *
+ * ThreadRoot(InitialPC, InitialArg, WhenDonePC, StartupPC)
+ *	InitialPC  - The program counter of the procedure to run
+ *			in this thread.
+ *      InitialArg - The single argument to the thread.
+ *	WhenDonePC - The routine to call when the thread returns.
+ *	StartupPC  - Routine to call when the thread is started.
+ *
+ *	ThreadRoot is called from the SWITCH() routine to start
+ *	a thread for the first time. 
+ *
+ * SWITCH(oldThread, newThread)
+ * 	oldThread  - The current thread that was running, where the
+ *		CPU register state is to be saved.
+ * 	newThread  - The new thread to be run, where the CPU register
+ *		state is to be loaded from.
+ */
+
+/*
+ Copyright (c) 1992-1993 The Regents of the University of California.
+ All rights reserved.  See copyright.h for copyright notice and limitation 
+ of liability and disclaimer of warranty provisions.
+ */
+
+#include "copyright.h"
+#include "switch.h"
+
+#ifdef HOST_SPARC
+/* NOTE!  These files appear not to exist on Solaris --
+ *  you need to find where (the SPARC-specific) MINFRAME, ST_FLUSH_WINDOWS, ...
+ *  are defined.  (I don't have a Solaris machine, so I have no way to tell.)
+ */
+#include      <sys/trap.h>
+#include      <sys/stack.h>
+.seg    "text"
+
+/* SPECIAL to the SPARC:
+ *	The first two instruction of ThreadRoot are skipped because
+ *	the address of ThreadRoot is made the return address of SWITCH()
+ *	by the routine Thread::StackAllocate.  SWITCH() jumps here on the
+ *	"ret" instruction which is really at "jmp %o7+8".  The 8 skips the
+ *	two nops at the beginning of the routine.
+ */
+
+
+.globl        ThreadRoot
+ThreadRoot:
+	nop  ; nop         /* These 2 nops are skipped because we are called
+			    * with a jmp+8 instruction. */
+	clr	%fp        /* Clearing the frame pointer makes gdb backtraces 
+	                    * of thread stacks end here. */
+			   /* Currently the arguments are in out registers we
+			    * save them into local registers so they won't be 
+			    * trashed during the calls we make. */
+	mov	InitialPC, %l0  
+	mov	InitialArg, %l1
+	mov	WhenDonePC, %l2
+			   /* Execute the code:
+			   *	call StartupPC();
+			   *	call InitialPC(InitialArg);
+			   *	call WhenDonePC();
+			   */
+	call	StartupPC,0
+	nop
+	call	%l0, 1	
+	mov	%l1, %o0   /* Using delay slot to setup argument to InitialPC */
+	call	%l2, 0
+	nop
+			   /* WhenDonePC call should never return.  If it does
+			    * we execute a trap into the debugger.  */
+	ta	ST_BREAKPOINT
+
+
+.globl        SWITCH
+SWITCH:
+	save	%sp, -SA(MINFRAME), %sp
+	st	%fp, [%i0]
+	st	%i0, [%i0+I0]
+	st	%i1, [%i0+I1]
+	st	%i2, [%i0+I2]
+	st	%i3, [%i0+I3]
+	st	%i4, [%i0+I4]
+	st	%i5, [%i0+I5]
+	st	%i7, [%i0+I7]
+	ta	ST_FLUSH_WINDOWS
+	nop
+	mov	%i1, %l0
+	ld	[%l0+I0], %i0
+	ld	[%l0+I1], %i1
+	ld	[%l0+I2], %i2
+	ld	[%l0+I3], %i3
+	ld	[%l0+I4], %i4
+	ld	[%l0+I5], %i5
+	ld	[%l0+I7], %i7
+	ld	[%l0], %i6
+	ret
+	restore
+
+
+#endif // HOST_SPARC
+
+#ifdef HOST_i386
+
+        .text
+        .align  2
+
+        .globl  ThreadRoot
+
+/* void ThreadRoot( void )
+**
+** expects the following registers to be initialized:
+**      ecx     points to startup function (interrupt enable)
+**      edx     contains inital argument to thread function
+**      esi     points to thread function
+**      edi     point to Thread::Finish()
+*/
+ThreadRoot:
+        pushl   %ebp
+        movl    %esp,%ebp
+        pushl   InitialArg
+        call    StartupPC
+        call    InitialPC
+        call    WhenDonePC
+
+
+        /* NOT REACHED */
+        movl    %ebp,%esp
+        popl    %ebp
+        ret
+
+
+
+/* void SWITCH(KernelContextT *oldCtx, KernelContextT *newCtx)
+**
+** on entry, stack looks like this:
+**      8(esp)  ->              kernelCtxt *t2  (ie newCtxt)
+**      4(esp)  ->              kernelCtxt *t1  (ie oldCtxt)
+**       (esp)  ->              return address
+*/
+        .comm   _eax_save,4
+
+        .globl  SWITCH
+SWITCH:
+        movl    %eax,_eax_save          # save the value of eax
+        movl    4(%esp),%eax            # move pointer to t1 into eax
+        movl    %ebx,_EBX(%eax)         # save registers
+        movl    %ecx,_ECX(%eax)
+        movl    %edx,_EDX(%eax)
+        movl    %esi,_ESI(%eax)
+        movl    %edi,_EDI(%eax)
+        movl    %ebp,_EBP(%eax)
+        movl    %esp,_ESP(%eax)         # save stack pointer
+        movl    _eax_save,%ebx          # get the saved value of eax
+        movl    %ebx,_EAX(%eax)         # store it
+        movl    0(%esp),%ebx            # get return address from stack into ebx
+        movl    %ebx,_PC(%eax)          # save it into the pc storage
+
+        movl    8(%esp),%eax            # move pointer to t2 into eax
+
+        movl    _EBX(%eax),%ebx         # retore old registers
+        movl    _ECX(%eax),%ecx
+        movl    _EDX(%eax),%edx
+        movl    _ESI(%eax),%esi
+        movl    _EDI(%eax),%edi
+        movl    _EBP(%eax),%ebp
+        movl    _ESP(%eax),%esp         # restore stack pointer
+        movl    _PC(%eax),%eax          # restore return address into eax
+        movl    _EAX(%eax),%eax         # get new value for eax into ebx
+ 
+        ret
+
+
+/* void SWITCH_NO_SAVE(kernelContextT *nextCtx)
+**
+** on entry, stack looks like this:
+**      4(esp)  ->              kernelCtxt *t1  (ie nextCtxt)
+**       (esp)  ->              return address
+*/
+	
+        .globl  SWITCH_NO_SAVE
+SWITCH_NO_SAVE:
+        movl    4(%esp),%eax            # move pointer to t2 into eax
+
+        movl    _EBX(%eax),%ebx         # retore old registers
+        movl    _ECX(%eax),%ecx
+        movl    _EDX(%eax),%edx
+        movl    _ESI(%eax),%esi
+        movl    _EDI(%eax),%edi
+        movl    _EBP(%eax),%ebp
+        movl    _ESP(%eax),%esp         # restore stack pointer
+        movl    _PC(%eax),%eax          # restore return address into eax
+        movl    _EAX(%eax),%eax         # get new value for eax into ebx
+ 
+        ret
+ 
+#endif
+
+
+#ifdef HOST_PPC
+
+                .globl branch[ds]
+                .csect branch[ds]
+                .long  .branch[PR]
+                .long  TOC[tc0]
+                .long  0
+                .toc
+ T.branch:      .tc    .branch[tc], branch[ds]
+                .globl .branch[PR]
+                .csect .branch[PR]
+
+         l      0, 0x0(11)        #  load function address into r0
+         mtctr  0                 #  move r0 into counter register
+         l      2, 0x4(11)        #  move new TOC address into r2
+         l      11, 0x8(11)       #  reset function address
+         bctr                     #  branch to the counter register
+
+
+                .globl ThreadRoot[ds]
+                .csect ThreadRoot[ds]
+                .long  .ThreadRoot[PR]
+                .long  TOC[tc0]
+                .long  0
+                .toc
+ T.ThreadRoot:  .tc    .ThreadRoot[tc], ThreadRoot[ds]
+                .globl .ThreadRoot[PR]
+                .csect .ThreadRoot[PR]
+ 
+                .set argarea,      32
+                .set linkarea,     24
+                .set locstckarea,   0
+                .set nfprs,        18
+                .set ngprs,        19
+                .set szdsa,        8*nfprs+4*ngprs+linkarea+argarea+locstckarea
+                
+
+         mflr    0
+         mfcr    12
+         bl      ._savef14
+         cror   0xf, 0xf, 0xf
+         stm    13, -8*nfprs-4*ngprs(1)
+         st     0, 8(1)
+         st     12, 4(1)
+         st     4,  24(1)
+         st     5,  28(1)
+         st     6,  32(1)
+         stu    1, -szdsa(1) 
+
+         muli   11,3,1          #  copy contents of register r24 to r11
+         bl     .branch[PR]      #  call function branch
+         cror   0xf, 0xf, 0xf    #  no operation
+         
+         ai     1,1,szdsa
+         lm     13, -8*nfprs-4*ngprs(1)
+         bl     ._restf14
+         cror   0xf, 0xf, 0xf
+         l      0, 8(1)
+         l      12, 4(1)
+         mtlr   0
+         mtcrf  0x38, 12
+         l      4, 24(1)
+         l      5, 28(1)
+         l      6, 32(1)
+  
+         mflr    0
+         mfcr    12
+         bl      ._savef14
+         cror   0xf, 0xf, 0xf
+         stm    13, -8*nfprs-4*ngprs(1)
+         st     0, 8(1)
+         st     12, 4(1)
+         st     6,  24(1)
+         stu    1, -szdsa(1)
+ 
+         muli   3, 4,1          #  load user function parameter r22 to r3       
+              
+         muli   11,5,1          #  copy contents of register r21 to r11
+         bl     .branch[PR]      #  call function branch
+         cror   0xf, 0xf, 0xf    #  no operation
+
+         ai     1,1,szdsa
+         lm     13, -8*nfprs-4*ngprs(1)
+         bl     ._restf14
+         cror   0xf, 0xf, 0xf
+         l      0, 8(1)
+         l      12, 4(1)
+         mtlr   0
+         mtcrf  0x38, 12
+         l      6, 24(1)
+
+         muli   11,6,1          #  copy contents of register r23 to r11
+         bl     .branch[PR]      #  call function branch
+         cror   0xf, 0xf, 0xf    #  no operation 
+         brl                     #  the programme should not return here.
+
+         .extern ._savef14
+         .extern ._restf14
+
+
+
+         
+            .globl SWITCH[ds]
+            .csect SWITCH[ds]
+            .long  .SWITCH[PR]
+            .long  TOC[tc0]
+            .long  0
+            .toc
+ T.SWITCH:  .tc    .SWITCH[tc], SWITCH[ds]
+            .globl .SWITCH[PR]
+            .csect .SWITCH[PR]
+
+         st     1,   0(3)       # store stack pointer
+         stm    13,  20(3)      # store general purpose registers (13 -31)
+         stfd   14,  96(3)      # store floating point registers (14 -31) 
+         stfd   15,  104(3)     # there is no single instruction to do for
+         stfd   16,  112(3)     # floating point registers. so do one by one
+         stfd   17,  120(3) 
+         stfd   18,  128(3) 
+         stfd   19,  136(3) 
+         stfd   20,  144(3) 
+         stfd   21,  152(3) 
+         stfd   22,  160(3) 
+         stfd   23,  168(3) 
+         stfd   24,  176(3) 
+         stfd   25,  184(3) 
+         stfd   26,  192(3) 
+         stfd   27,  200(3) 
+         stfd   28,  208(3) 
+         stfd   29,  216(3) 
+         stfd   30,  224(3) 
+         stfd   31,  232(3) 
+         mflr   0               # move link register value to register 0
+         st     0,   244(3)     # store link register value
+       
+         mfcr   12              # move condition register to register 12
+         st     12,  240(3)     # store condition register value
+
+
+         l      1,   0(4)       # load stack pointer
+         l      0,   244(4)     # load link register value
+         mtlr   0         
+         l      12,  240(4)     # load condition register value
+         mtcrf  0x38,  12
+
+
+
+         lm     13,  20(4)      # load into general purpose registers (13 -31) 
+         lfd    14,  96(4)      # load into floating point registers (14 -31) 
+         lfd    15,  104(4)     # there is no single instruction for
+         lfd    16,  112(4)     # loading into more than one floating point 
+         lfd    17,  120(4)     # registers. so do one by one.
+         lfd    18,  128(4) 
+         lfd    19,  136(4) 
+         lfd    20,  144(4) 
+         lfd    21,  152(4) 
+         lfd    22,  160(4) 
+         lfd    23,  168(4) 
+         lfd    24,  176(4) 
+         lfd    25,  184(4) 
+         lfd    26,  192(4) 
+         lfd    27,  200(4) 
+         lfd    28,  208(4) 
+         lfd    29,  216(4) 
+         lfd    30,  224(4) 
+         lfd    31,  232(4) 
+         l      3,   16(4)
+         l      5,   4(4)
+         l      6,   12(4)
+         l      4,   8(4)
+
+         brl                    # branch to the address held in link register.
+
+#endif // HOST_PPC
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

@@ -1,0 +1,103 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.31;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file tlb.h
+   \brief Data structures for the TLB - Translate Look-aside Buffer
+  
+    DO NOT CHANGE -- part of the machine emulation
+  
+    Copyright (c) 1999-2000 INSA de Rennes.
+    All rights reserved.  
+    See copyright_insa.h for copyright notice and limitation 
+    of liability and disclaimer of warranty provisions.
+*/
+
+#ifndef TLB_H
+#define TLB_H
+
+class TLB;
+class TLBEntry;
+class LRU;
+
+/*!
+// \brief Defines a simple TLB (Translate Look-aside Buffer)
+//
+// This object manages the Translate Look-aside Buffer of the simulated MIPS
+// processor for the Nachos kernel. It is a cache of translations to provide
+// the illusion of fast access to the address space
+*/
+
+class TLB {
+public:
+  TLB(void);
+
+  ~TLB();
+  
+  void Add(int virtPage, int physPage, bool readOnly); //!< Add an entry in the TLB
+  bool Translate(int virtPage, int* physPage, bool* readOnly); //!< Perform address translation
+
+  void Flush(); //!< Flush entirely the TLB
+  void Invalid(int virtPage); //!< Invalidate one entry in the TLB
+  void Dump(); //!< Dump the TLB state into the screen
+
+
+private:
+  TLBEntry *cache; // Associative cache storing the address translations
+  LRU *list;       // List for the LRU replacement policy
+};
+
+/*! \class TLBEntry 
+// \brief Defines an entry in the TLB
+*/
+class TLBEntry {
+  public:
+    short int virtualPage;  	//!< The page number in virtual memory.
+    short int physicalPage;  	/*!< The page number in real memory (relative to the
+			  start of "mainMemory") 
+			*/
+    bool valid;         /*!< If this bit isn't set, the translation is ignored.
+			  (In other words, the entry hasn't been initialized.)
+			*/
+
+    bool readOnly;	/*!< If this bit is set, the user program is not allowed
+			  to modify the contents of the page.*/
+
+};
+
+
+#endif // TLB_H
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

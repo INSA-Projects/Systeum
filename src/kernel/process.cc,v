@@ -1,0 +1,129 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @// @;
+
+
+1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.29;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file  process.cc
+//  \brief Routines to manage processes
+*/
+
+#include "copyright.h"
+#include "system.h"
+
+#include "msgerror.h"
+#include "process.h"
+
+//----------------------------------------------------------------------
+// Process::Process
+/*! 	Constructor. Create the environment to run a user program
+//      (address space, statistics, ...)
+//
+//	\param executable is the file containing the object code 
+//             to load into memory
+//      \param err: error code 0 if OK, -1 otherwise
+*/
+//----------------------------------------------------------------------
+Process::Process(char *fileName, int *err)
+{
+  numThreads=0;
+  *err = NoError;
+
+  if (fileName == NULL)
+    {
+      DEBUG('t', "Create empty process\n");
+
+      // Create a statistics object for the program
+      stat = stats->NewProcStat("BOOT");
+
+      // Fake process Name
+      name = new char[strlen("BOOT")+1];
+      strcpy(name, "BOOT");
+
+      // No Executable to open
+      execFile = NULL;
+    }
+  else
+    {
+      DEBUG('t', "Create named process %s\n", fileName);
+
+      // Create a statistics object for the program
+      stat = stats->NewProcStat(fileName);
+
+      // Set process name
+      name = new char[strlen(fileName)+1];
+      strcpy(name,fileName);
+
+      // Open executable
+      execFile = fileSystem->Open(fileName);
+      if (execFile == NULL) {
+	// NB : don't delete the stat object, so that statistics can
+	// be displayed after the end of the process
+	*err = InexistFileError;
+	return;
+      }
+    }
+
+  // Create the new address space associated with this file
+  addrSpace = new AddrSpace(execFile, this, err);
+  if (*err != NoError)
+    {
+      delete addrSpace;
+	// NB : don't delete the stat object, so that statistics can
+	// be displayed after the end of the process
+      delete [] name;
+      return;
+    }
+
+}
+
+//----------------------------------------------------------------------
+// Process::~Process
+//!   Destructor. De-alloate a process and all its components
+//      (address space, ...)
+//----------------------------------------------------------------------
+Process::~Process()
+{
+    ASSERT(numThreads==0);
+
+    if (execFile != NULL) {
+      delete addrSpace;
+      if (execFile)
+	delete execFile;	
+      delete [] name;
+	// NB : don't delete the stat object, so that statistics can
+	// be displayed after the end of the process
+    } 
+}
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

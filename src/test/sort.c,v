@@ -1,0 +1,100 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/* sort.c 
+ *    Test program to sort a large number of integers.
+ *
+ *    Intention is to stress virtual memory system.
+ *
+ *    Ideally, we could read the unsorted array off of the file system,
+ *	and store the result back to the file system!
+//
+//  Copyright (c) 1999-2000 INSA de Rennes.
+//  All rights reserved.  
+//  See copyright_insa.h for copyright notice and limitation 
+//  of liability and disclaimer of warranty provisions.
+*/
+
+// Nachos system calls
+#include "syscall.h"
+
+// Table to be sorted
+#define NUM 30
+int A[NUM];	
+
+int
+main()
+{
+    int i, j, tmp;
+
+    Write("Start sort\n",11,ConsoleOutput);
+    
+    /* first initialize the array, in reverse sorted order */
+    for (i = 0; i < NUM; i++)		
+        A[i] = NUM - i;
+
+
+    /*
+    for (i = 0; i < NUM; i++) {
+      WriteInt(A[i]);
+      Write("\t",1,ConsoleOutput);
+    }
+    */
+    
+    /* Write("\n\n",2,ConsoleOutput);*/
+
+    /* then sort! */
+    for (i = 0; i < (NUM-1); i++)
+        for (j = i; j < ((NUM-1) - i); j++)
+	   if (A[j] > A[j + 1]) {	/* out of order -> need to swap ! */
+	      tmp = A[j];
+	      A[j] = A[j + 1];
+	      A[j + 1] = tmp;
+    	   }
+
+    /*
+    for (i = 0; i < NUM; i++) {
+      WriteInt(A[i]);
+      Write("\t",1,ConsoleOutput);
+    } 
+    */
+
+    Write("End sort\n",9,ConsoleOutput);
+    Exit(A[0]);		/* and then we're done -- should be 0! */
+    return 0;
+}
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@

@@ -1,0 +1,121 @@
+head     1.1;
+branch   1.1.1;
+access   ;
+symbols  v0:1.1.1.1 Base:1.1.1;
+locks    ; strict;
+comment  @ * @;
+
+
+1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches 1.1.1.1;
+next     ;
+
+1.1.1.1
+date     2005.10.17.18.33.30;  author pgarcia;  state Exp;
+branches ;
+next     ;
+
+
+desc
+@@
+
+
+
+1.1
+log
+@Initial revision
+@
+text
+@/*! \file lru.h 
+   \brief Data structures to use LRU algorithm. 
+  
+    DO NOT CHANGE -- part of the machine emulation
+  
+    Copyright (c) 1999-2000 INSA de Rennes.
+    All rights reserved.  
+    See copyright_insa.h for copyright notice and limitation 
+    of liability and disclaimer of warranty provisions.
+*/ 
+ 
+#ifndef LRU_H 
+#define LRU_H 
+ 
+/*! \brief definition of a "LRU element" 
+ // 
+ // The class defines a "LRU element", it is equivalent to a 
+ // list element, with a "car" ("next") pointing to the next element on the LRU, 
+ // and a "cdr" ("item") pointing to the current item. 
+ // Internal data structures kept public so that LRU operations can 
+ // access them directly. 
+*/ 
+ 
+class LRUElement { 
+   public: 
+	 
+     //! Next element on list, NULL if this is the last. 
+     LRUElement *next; 
+ 
+     //! Previous element on list, NULL if this is the first. 
+     LRUElement *prev; 
+ 
+     //! Value of the element.		 
+     int v; 
+ 
+     //! Constructor. Initialize a LRU element. 
+     LRUElement(int v); 
+	  
+	    	 
+}; 
+ 
+/*! \brief Definition of a "LRU algorithm"  
+// 
+// The following class defines a list -- a double linked list of 
+// LRU elements, each of which points to a single item. 
+// The first element is the "older" one 
+// The last element is the "younger" one 
+*/ 
+ 
+class LRU { 
+  public: 
+    //! Constructor. Initialize the LRU. 
+    LRU(int max); 
+ 
+    //! Destructor. De-allocate the LRU.  
+    ~LRU(); 
+ 
+    //! Called when using member number "value". 
+    int Use(int value); 
+
+    //! Called when wanting the value of the oldest element of the list
+    int WantOldest();
+ 
+    //! Flush the list 
+    void Flush(); 
+ 
+    void Dump(); 
+     
+ private: 
+    //! Size and maximum size of the list 
+    int size; 
+    int size_max; 
+ 
+    //! Head of the list, NULL if LRU is empty. 
+    LRUElement *first; 
+    //! Last element of list.   
+    LRUElement *last;		 
+
+    // New element for the list 
+    LRUElement* NewElement(int value); 
+}; 
+ 
+#endif // LRU_H 
+@
+
+
+1.1.1.1
+log
+@creation nachos 2005
+@
+text
+@@
