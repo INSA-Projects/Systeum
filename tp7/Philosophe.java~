@@ -17,7 +17,7 @@ public class Philosophe extends Thread
 			while(true) 
 			{
 				System.out.println("Moi, philosophe"+_id+", je desire manger !");
-				_table.prendreBaguettes2(_id);
+				_table.prendreBaguettes(_id);
 				System.out.println("Ah, moi, le philosophe "+_id+", j'ai bien mangé.");
 				System.out.println("Je pense... donc je suis "+_id);
 				Thread.sleep(5000);
